@@ -5,6 +5,8 @@ using TurneroWorker;
 using TurneroWorker.Configuration;
 using TurneroWorker.Services;
 
+bool forceRun = args.Contains("--force");
+
 var builder = Host.CreateApplicationBuilder(args);
 
 // ── Configuración ────────────────────────────────────────────────────────────
@@ -23,6 +25,21 @@ builder.Services.AddScoped<ReminderService>();
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.SetMinimumLevel(LogLevel.Information);
+
+if (forceRun)
+{
+    // Modo one-shot: ejecutar ahora y salir
+    var app = builder.Build();
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("=== Modo --force: ejecutando recordatorios ahora ===");
+
+    await using var scope = app.Services.CreateAsyncScope();
+    var reminder = scope.ServiceProvider.GetRequiredService<ReminderService>();
+    await reminder.EjecutarAsync();
+
+    logger.LogInformation("=== Ejecución forzada completada. Saliendo. ===");
+    return;
+}
 
 // ── Worker (Singleton: usa IServiceScopeFactory para resolver Scoped) ────────
 builder.Services.AddHostedService<Worker>();
