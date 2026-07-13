@@ -92,8 +92,10 @@ public class ReminderService
                 errores++;
             }
 
-            // Pequeña pausa entre envíos para no saturar la API
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            // Pausa aleatoria entre envíos: 15-45 segundos (comportamiento humano)
+            var delaySegundos = Random.Shared.Next(15, 46);
+            _logger.LogInformation("Esperando {Seg}s antes del próximo envío...", delaySegundos);
+            await Task.Delay(TimeSpan.FromSeconds(delaySegundos), cancellationToken);
         }
 
         _logger.LogInformation(

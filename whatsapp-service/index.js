@@ -125,10 +125,15 @@ app.post('/send', async (req, res) => {
         });
     }
 
-    // Baileys usa el formato: NÚMERO@s.whatsapp.net
     const jid = `${phone}@s.whatsapp.net`;
 
     try {
+        // Simular "escribiendo..." por un tiempo proporcional al largo del mensaje (más humano)
+        const typingMs = 1500 + Math.min(message.length * 30, 4000);
+        await sock.sendPresenceUpdate('composing', jid);
+        await new Promise(r => setTimeout(r, typingMs));
+        await sock.sendPresenceUpdate('paused', jid);
+
         const result = await sock.sendMessage(jid, { text: message });
         const messageId = result?.key?.id ?? 'n/a';
         console.log(`[WhatsApp] ✓ Enviado a ${phone} | ID: ${messageId}`);

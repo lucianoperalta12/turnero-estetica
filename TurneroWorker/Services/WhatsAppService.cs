@@ -82,11 +82,28 @@ public class WhatsAppService
         return soloDigitos;
     }
 
-    private static string BuildMensaje(TurnoInfo turno) =>
-        $"Hola {turno.Nombre} 👋\n\n" +
-        $"Te recordamos que hoy tenés un turno en la Estética a las {turno.Hora}.\n\n" +
-        "Si necesitás reprogramarlo o cancelarlo, respondé a este mensaje.\n\n" +
-        "¡Te esperamos! 💖";
+    private static string BuildMensaje(TurnoInfo turno)
+    {
+        // Rotar entre variantes para no enviar siempre el mismo texto
+        var variante = Random.Shared.Next(3);
+        return variante switch
+        {
+            0 => $"Hola {turno.Nombre} 👋\n\n" +
+                 $"Te recordamos que hoy tenés turno en la Estética a las {turno.Hora}.\n\n" +
+                 "Si necesitás reprogramarlo avisanos por este medio.\n\n" +
+                 "¡Te esperamos! 💖",
+
+            1 => $"¡Hola {turno.Nombre}! 😊\n\n" +
+                 $"Solo para recordarte tu turno de hoy a las {turno.Hora} en la Estética.\n\n" +
+                 "Ante cualquier cambio no dudes en escribirnos.\n\n" +
+                 "¡Hasta pronto! ✨",
+
+            _ => $"Hola {turno.Nombre}, buenas 🌸\n\n" +
+                 $"Te avisamos que tu turno es hoy a las {turno.Hora}.\n\n" +
+                 "Si necesitás cancelar o cambiar la hora, respondé este mensaje.\n\n" +
+                 "¡Te esperamos con todo listo! 💅"
+        };
+    }
 
     private static string? ExtraerMessageId(string json)
     {
