@@ -41,7 +41,7 @@ async function connectToWhatsApp() {
         printQRInTerminal: false,   // lo manejamos nosotros
         logger,
         // Sin store en memoria, sin browser fingerprint pesado
-        browser: ['TurneroWorker', 'Chrome', '120.0.0'],
+        browser: ['Mac OS', 'Chrome', '121.0.0'],
         markOnlineOnConnect: false,  // no mostrar "en línea" en el celular
         syncFullHistory: false
     });
