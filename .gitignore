@@ -1,0 +1,26 @@
+# .NET
+bin/
+obj/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Application Specific
+TurneroWorker/credentials.json
+TurneroWorker/token.json
+whatsapp-service/auth_session/
+whatsapp-service/qr.png
+
+# IDEs and Editors
+.vs/
+.vscode/
+*.suo
+*.user
+*.sln.docstates

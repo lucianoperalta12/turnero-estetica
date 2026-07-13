@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-service",
+  "version": "2.0.0",
+  "description": "Microservicio HTTP minimalista para envío de WhatsApp via Baileys (sin Puppeteer, sin DB, sin Docker)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.16",
+    "express": "^4.18.2",
+    "pino": "^9.0.0",
+    "qrcode": "^1.5.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
