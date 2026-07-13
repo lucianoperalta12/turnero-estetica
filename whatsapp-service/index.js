@@ -129,7 +129,7 @@ app.post('/send', async (req, res) => {
 
     try {
         // Simular "escribiendo..." por un tiempo proporcional al largo del mensaje (más humano)
-        const typingMs = 1500 + Math.min(message.length * 30, 4000);
+        const typingMs = 1500 + Math.min(message.length * 30, 13500);
         await sock.sendPresenceUpdate('composing', jid);
         await new Promise(r => setTimeout(r, typingMs));
         await sock.sendPresenceUpdate('paused', jid);
