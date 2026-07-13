@@ -84,24 +84,33 @@ public class WhatsAppService
 
     private static string BuildMensaje(TurnoInfo turno)
     {
-        // Rotar entre variantes para no enviar siempre el mismo texto
-        var variante = Random.Shared.Next(3);
+        var variante = Random.Shared.Next(5);
         return variante switch
         {
             0 => $"Hola {turno.Nombre} 👋\n\n" +
                  $"Te recordamos que hoy tenés turno en la Estética a las {turno.Hora}.\n\n" +
-                 "Si necesitás reprogramarlo avisanos por este medio.\n\n" +
+                 "Si necesitás reprogramarlo, escribinos por este medio.\n\n" +
                  "¡Te esperamos! 💖",
 
-            1 => $"¡Hola {turno.Nombre}! 😊\n\n" +
-                 $"Solo para recordarte tu turno de hoy a las {turno.Hora} en la Estética.\n\n" +
-                 "Ante cualquier cambio no dudes en escribirnos.\n\n" +
-                 "¡Hasta pronto! ✨",
+            1 => $"¡Hola, {turno.Nombre}! 😊\n\n" +
+                 $"Hoy te esperamos en la Estética. Tu turno está programado para las {turno.Hora}.\n\n" +
+                 "Si querés modificar el horario, respondé este mensaje.\n\n" +
+                 "¡Nos vemos pronto! ✨",
 
-            _ => $"Hola {turno.Nombre}, buenas 🌸\n\n" +
-                 $"Te avisamos que tu turno es hoy a las {turno.Hora}.\n\n" +
-                 "Si necesitás cancelar o cambiar la hora, respondé este mensaje.\n\n" +
-                 "¡Te esperamos con todo listo! 💅"
+            2 => $"Buen día, {turno.Nombre} 🌸\n\n" +
+                 $"Queríamos confirmarte tu turno de hoy a las {turno.Hora}.\n\n" +
+                 "Si no podés asistir o necesitás cambiarlo, avisanos con este mensaje.\n\n" +
+                 "¡Que tengas un lindo día! 💅",
+
+            3 => $"Hola {turno.Nombre}.\n\n" +
+                 $"Este es un recordatorio de tu turno de hoy en la Estética, previsto para las {turno.Hora}.\n\n" +
+                 "Ante cualquier inconveniente, escribinos para ayudarte con el cambio.\n\n" +
+                 "¡Te esperamos!",
+
+            _ => $"¡Hola! 👋\n\n" +
+                 $"{turno.Nombre}, te esperamos hoy a las {turno.Hora} para tu turno.\n\n" +
+                 "Si necesitás reprogramarlo, respondé este WhatsApp.\n\n" +
+                 "¡Nos vemos!"
         };
     }
 
