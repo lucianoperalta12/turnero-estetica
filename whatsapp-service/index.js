@@ -8,7 +8,7 @@ import { Boom } from '@hapi/boom';
 import express from 'express';
 import pino from 'pino';
 import QRCode from 'qrcode';
-import { writeFileSync, existsSync } from 'fs';
+import { writeFileSync, existsSync, rmSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -23,6 +23,7 @@ const logger = pino({ level: 'silent' });
 let sock = null;
 let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'open'
 let currentQR = null;
+let qrTimestamp = null;  // cuándo se generó el QR actual
 
 // ── Conexión a WhatsApp ─────────────────────────────────────────────────────
 
@@ -54,10 +55,11 @@ async function connectToWhatsApp() {
 
         if (qr) {
             currentQR = qr;
+            qrTimestamp = Date.now();
             connectionStatus = 'connecting';
             console.log('\n[WhatsApp] ── QR generado ──────────────────────────────');
             console.log('[WhatsApp] Escaneá desde WhatsApp > Dispositivos vinculados > Vincular dispositivo');
-            console.log('[WhatsApp] También disponible en: GET http://localhost:' + PORT + '/qr (imagen PNG)\n');
+            console.log('[WhatsApp] También disponible en: GET http://localhost:' + PORT + '/qr\n');
 
             // Guardar QR como imagen PNG para escanear desde el celular
             try {
@@ -139,25 +141,101 @@ app.post('/send', async (req, res) => {
 
 /**
  * GET /qr
- * Devuelve el QR actual como imagen PNG para escanear desde el iPhone.
- * Si ya está conectado devuelve 200 con mensaje de texto.
+ * Muestra página HTML con el QR y auto-refresh cada 15 segundos.
+ * GET /qr?raw=1  → devuelve solo la imagen PNG (para automatización).
  */
-app.get('/qr', async (_req, res) => {
+app.get('/qr', async (req, res) => {
     if (connectionStatus === 'open') {
-        return res.status(200).send('WhatsApp ya está conectado. No necesitás escanear el QR.');
+        return res.status(200).send('<h2>✅ WhatsApp ya está conectado.</h2>');
     }
+
     if (!currentQR) {
-        return res.status(202).send('Todavía no hay QR disponible. Esperá unos segundos y recargá.');
+        // Sin QR aún: devolver página que recarga sola
+        return res.status(202).send(`
+            <!DOCTYPE html><html><head><meta charset="utf-8">
+            <meta http-equiv="refresh" content="5">
+            <title>QR WhatsApp</title></head><body>
+            <h2>⏳ Generando QR...</h2>
+            <p>Esta página se recargará automáticamente en 5 segundos.</p>
+            </body></html>`);
     }
+
+    // QR disponible
+    const qrAgeSeconds = Math.floor((Date.now() - qrTimestamp) / 1000);
+
+    if (req.query.raw === '1') {
+        // Modo imagen pura
+        try {
+            const buffer = await QRCode.toBuffer(currentQR, { scale: 8 });
+            res.setHeader('Content-Type', 'image/png');
+            return res.send(buffer);
+        } catch (err) {
+            return res.status(500).json({ ok: false, error: err.message });
+        }
+    }
+
+    // Modo HTML con auto-refresh
     try {
-        const buffer = await QRCode.toBuffer(currentQR, { scale: 8 });
-        res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Content-Disposition', 'inline; filename="qr.png"');
-        return res.send(buffer);
+        const dataUrl = await QRCode.toDataURL(currentQR, { scale: 8 });
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(`
+            <!DOCTYPE html><html><head><meta charset="utf-8">
+            <meta http-equiv="refresh" content="15">
+            <title>QR WhatsApp</title>
+            <style>body{font-family:sans-serif;text-align:center;padding:2rem;background:#111;color:#eee}
+            img{border:8px solid white;border-radius:12px;max-width:300px}</style></head><body>
+            <h2>📱 Escaneá con WhatsApp</h2>
+            <p>WhatsApp → Dispositivos vinculados → Vincular dispositivo</p>
+            <img src="${dataUrl}" />
+            <p style="color:#aaa;font-size:.85rem">QR generado hace ${qrAgeSeconds}s · página se recarga cada 15s</p>
+            <p><a href="/reset" onclick="return confirm('¿Borrar sesión y generar nuevo QR?')" 
+               style="color:#f88">🔄 Resetear sesión y generar nuevo QR</a></p>
+            </body></html>`);
     } catch (err) {
         return res.status(500).json({ ok: false, error: err.message });
     }
 });
+
+/**
+ * POST /reset
+ * Borra auth_session y fuerza reconexión completa generando un QR nuevo.
+ * Útil cuando el QR expiró o la sesión quedó en estado inválido.
+ */
+app.post('/reset', (_req, res) => doReset(res));
+
+/**
+ * GET /reset  (acceso desde browser con confirmación en /qr)
+ */
+async function doReset(res) {
+    console.log('[WhatsApp] 🔄 Reset solicitado — borrando sesión...');
+
+    try {
+        if (sock) {
+            sock.ev.removeAllListeners();
+            await sock.logout().catch(() => {});
+            sock = null;
+        }
+    } catch (_) {}
+
+    currentQR = null;
+    qrTimestamp = null;
+    connectionStatus = 'disconnected';
+
+    try {
+        if (existsSync(AUTH_DIR)) {
+            rmSync(AUTH_DIR, { recursive: true, force: true });
+            console.log('[WhatsApp] Sesión borrada.');
+        }
+    } catch (err) {
+        console.error('[WhatsApp] Error borrando sesión:', err.message);
+        return res.status(500).json({ ok: false, error: err.message });
+    }
+
+    setTimeout(() => connectToWhatsApp().catch(console.error), 500);
+    return res.json({ ok: true, message: 'Sesión reseteada. Nuevo QR disponible en GET /qr en ~5 segundos.' });
+}
+
+app.get('/reset', (_req, res) => doReset(res));
 
 /**
  * GET /status
