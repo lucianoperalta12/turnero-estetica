@@ -49,10 +49,6 @@ public class Worker : BackgroundService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var reminderService = scope.ServiceProvider.GetRequiredService<ReminderService>();
             await reminderService.EjecutarAsync(stoppingToken);
-
-            // Desconectar WhatsApp al terminar el ciclo para no quedar "en línea"
-            var whatsAppService = scope.ServiceProvider.GetRequiredService<WhatsAppService>();
-            await whatsAppService.DesconectarAsync();
         }
 
         _logger.LogInformation("TurneroWorker detenido.");

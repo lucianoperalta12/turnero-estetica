@@ -30,12 +30,12 @@ public class WhatsAppService
     /// </summary>
     public async Task<WhatsAppSendResult> EnviarRecordatorioAsync(TurnoInfo turno)
     {
-        var url = $"{_config.BaseUrl.TrimEnd('/')}/send";
+        var url = _config.ServiceUrl;
         var mensaje = BuildMensaje(turno);
 
         var payload = new
         {
-            phone = NormalizarTelefono(turno.Telefono),
+            phone = turno.Telefono,
             message = mensaje
         };
 
@@ -74,32 +74,44 @@ public class WhatsAppService
     }
 
     /// <summary>
-    /// Llama a POST /disconnect en el microservicio para cerrar la sesión de WhatsApp
-    /// y evitar que el número quede visible como "en línea" entre ciclos de envío.
+    /// Envía un mensaje de texto libre a un número específico.
+    /// Usado principalmente para alertas al administrador.
     /// </summary>
-    public async Task DesconectarAsync()
+    public async Task<WhatsAppSendResult> EnviarMensajeDirectoAsync(string phone, string mensaje)
     {
-        var url = $"{_config.BaseUrl.TrimEnd('/')}/disconnect";
+        var url = _config.ServiceUrl;
+        var payload = new { phone, message = mensaje };
+
+        var json = JsonSerializer.Serialize(payload);
+
         using var client = _httpClientFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        HttpResponseMessage response;
         try
         {
-            var response = await client.PostAsync(url, null);
-            _logger.LogInformation("WhatsApp desconectado tras ciclo. Estado HTTP: {Status}", (int)response.StatusCode);
+            response = await client.SendAsync(request);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "No se pudo desconectar el servicio WhatsApp en {Url}", url);
+            _logger.LogError(ex, "Error de red al enviar mensaje directo a {Phone}", phone);
+            return WhatsAppSendResult.ErrorRed(ex.Message);
         }
+
+        var body = await response.Content.ReadAsStringAsync();
+        var statusCode = (int)response.StatusCode;
+
+        if (response.IsSuccessStatusCode)
+        {
+            _logger.LogInformation("Mensaje directo enviado a {Phone}", phone);
+            return WhatsAppSendResult.Ok(ExtraerMessageId(body), statusCode, body);
+        }
+
+        _logger.LogError("Error al enviar mensaje directo a {Phone} [{Status}]: {Body}", phone, statusCode, body);
+        return WhatsAppSendResult.Fallo(statusCode, body);
     }
 
-    /// <summary>
-    /// Normaliza el teléfono
-    /// </summary>
-    private static string NormalizarTelefono(string telefono)
-    {
-        var soloDigitos = new string(telefono.Where(char.IsDigit).ToArray());
-        return soloDigitos;
-    }
 
     private static string BuildMensaje(TurnoInfo turno)
     {

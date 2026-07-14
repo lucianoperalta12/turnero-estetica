@@ -3,6 +3,7 @@ namespace TurneroWorker.Configuration;
 public class AppSettings
 {
     public GoogleCalendarConfig GoogleCalendar { get; set; } = new();
+    public GoogleSheetsConfig GoogleSheets { get; set; } = new();
     public WhatsAppConfig WhatsApp { get; set; } = new();
     public ScheduleConfig Schedule { get; set; } = new();
 }
@@ -13,22 +14,22 @@ public class GoogleCalendarConfig
     public string CredentialsFilePath { get; set; } = string.Empty;
 }
 
+public class GoogleSheetsConfig
+{
+    public string SpreadsheetId { get; set; } = string.Empty;
+    /// <summary>
+    /// Rango de la hoja. Columna A = Nombre, Columna B = Teléfono.
+    /// Empieza en A2 para saltear el encabezado.
+    /// </summary>
+    public string Range { get; set; } = "'Hoja 1'!A2:B";
+}
+
 public class WhatsAppConfig
 {
-    /// <summary>
-    /// URL base de Evolution API, p.ej. "http://localhost:8080"
-    /// </summary>
-    public string BaseUrl { get; set; } = "http://localhost:8080";
-
-    /// <summary>
-    /// API Key configurada en Evolution API (AUTHENTICATION_API_KEY del docker-compose)
-    /// </summary>
-    public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Nombre de la instancia de WhatsApp creada en Evolution API
-    /// </summary>
-    public string Instance { get; set; } = "turnero";
+    /// <summary>URL del microservicio Node.js, p.ej. "http://localhost:3000/send"</summary>
+    public string ServiceUrl { get; set; } = "http://localhost:3000/send";
+    /// <summary>Número del administrador que recibe alertas cuando un paciente no se encuentra en el directorio.</summary>
+    public string AdminPhone { get; set; } = string.Empty;
 }
 
 public class ScheduleConfig

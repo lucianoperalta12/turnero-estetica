@@ -1,125 +1,81 @@
-import makeWASocket, {
-    useMultiFileAuthState,
-    DisconnectReason,
-    fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore
-} from '@whiskeysockets/baileys';
-import { Boom } from '@hapi/boom';
-import express from 'express';
-import pino from 'pino';
-import QRCode from 'qrcode';
-import { writeFileSync, existsSync, rmSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+'use strict';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const AUTH_DIR = join(__dirname, 'auth_session');
-const QR_PATH  = join(__dirname, 'qr.png');
-const PORT     = process.env.PORT || 3000;
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const QRCode = require('qrcode');
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
 
-// Logger silencioso para producción (solo errores en consola)
-const logger = pino({ level: 'silent' });
+const PORT = process.env.PORT || 3000;
+const QR_PATH = path.join(__dirname, 'qr.png');
 
-let sock = null;
-let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'open'
-let currentQR = null;
-let qrTimestamp = null;  // cuándo se generó el QR actual
-let isIntentionalDisconnect = false; // evita reconexión automática tras desconexión voluntaria
+const client = new Client({
+    authStrategy: new LocalAuth({
+        dataPath: './.wwebjs_auth'
+    }),
+    puppeteer: {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    }
+});
 
-// ── Conexión a WhatsApp ─────────────────────────────────────────────────────
+let connectionStatus = 'esperando QR'; // 'esperando QR', 'autenticando', 'conectado', 'desconectado'
+let authenticatedNumber = null;
+let currentQRDataUrl = null;
 
-async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-    const { version } = await fetchLatestBaileysVersion();
+client.on('qr', async (qr) => {
+    connectionStatus = 'esperando QR';
+    try {
+        // Generar y almacenar localmente la imagen qr.png
+        await QRCode.toFile(QR_PATH, qr, { scale: 8 });
+        
+        // Generar la versión DataURL para renderizar en el endpoint /qr
+        currentQRDataUrl = await QRCode.toDataURL(qr, { scale: 8 });
+        
+        console.log(`[WhatsApp] [${new Date().toLocaleTimeString()}] Nuevo código QR generado. Disponible en http://localhost:${PORT}/qr`);
+    } catch (err) {
+        console.error('[WhatsApp] Error al procesar el código QR:', err.message);
+    }
+});
 
-    console.log(`[WhatsApp] Usando Baileys versión de protocolo: ${version.join('.')}`);
-
-    sock = makeWASocket({
-        version,
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, logger)
-        },
-        printQRInTerminal: false,   // lo manejamos nosotros
-        logger,
-        // Sin store en memoria, sin browser fingerprint pesado
-        browser: ['Mac OS', 'Chrome', '121.0.0'],
-        markOnlineOnConnect: false,  // no mostrar "en línea" en el celular
-        syncFullHistory: false
-    });
-
-    // Guardar credenciales cada vez que cambian
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-            currentQR = qr;
-            qrTimestamp = Date.now();
-            connectionStatus = 'connecting';
-            console.log('\n[WhatsApp] ── QR generado ──────────────────────────────');
-            console.log('[WhatsApp] Escaneá desde WhatsApp > Dispositivos vinculados > Vincular dispositivo');
-            console.log('[WhatsApp] También disponible en: GET http://localhost:' + PORT + '/qr\n');
-
-            // Guardar QR como imagen PNG para escanear desde el celular
-            try {
-                await QRCode.toFile(QR_PATH, qr, { scale: 8 });
-            } catch (err) {
-                console.error('[WhatsApp] Error guardando QR PNG:', err.message);
-            }
+client.on('ready', () => {
+    connectionStatus = 'conectado';
+    authenticatedNumber = client.info.wid.user;
+    currentQRDataUrl = null;
+    console.log(`[WhatsApp] Estado: Conectado. Número: ${authenticatedNumber}`);
+    
+    if (fs.existsSync(QR_PATH)) {
+        try {
+            fs.unlinkSync(QR_PATH);
+        } catch (err) {
+            // Ignorar errores al borrar
         }
+    }
+});
 
-        if (connection === 'open') {
-            currentQR = null;
-            connectionStatus = 'open';
-            console.log('[WhatsApp] ✓ Conectado como:', sock.user?.id);
+client.on('authenticated', () => {
+    connectionStatus = 'autenticando';
+    console.log('[WhatsApp] Estado: Autenticando...');
+});
 
-            // Forzar inmediatamente el estado a invisible
-            sock.sendPresenceUpdate('unavailable').catch(err => {
-                console.error('[WhatsApp] Error al setear presence unavailable:', err.message);
-            });
+client.on('auth_failure', (msg) => {
+    connectionStatus = 'desconectado';
+    console.error('[WhatsApp] Fallo de autenticación:', msg);
+});
 
-            // Limpiar QR PNG ya no necesario
-            if (existsSync(QR_PATH)) {
-                try { writeFileSync(QR_PATH, ''); } catch (_) {}
-            }
-        }
+client.on('disconnected', (reason) => {
+    connectionStatus = 'desconectado';
+    authenticatedNumber = null;
+    currentQRDataUrl = null;
+    console.warn('[WhatsApp] Desconectado del celular:', reason);
+});
 
-        if (connection === 'close') {
-            connectionStatus = 'disconnected';
-            const statusCode = (lastDisconnect?.error instanceof Boom)
-                ? lastDisconnect.error.output.statusCode
-                : null;
-            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-
-            console.warn(`[WhatsApp] Conexión cerrada. Código: ${statusCode}. Intencional: ${isIntentionalDisconnect}`);
-
-            if (isLoggedOut) {
-                console.error('[WhatsApp] Sesión cerrada por el usuario (logged out). Borrá auth_session/ y reiniciá.');
-            } else if (!isIntentionalDisconnect) {
-                console.log('[WhatsApp] Reconectando en 3 segundos...');
-                setTimeout(connectToWhatsApp, 3000);
-            } else {
-                console.log('[WhatsApp] Desconexión intencional. Se reconectará en el próximo ciclo de envío.');
-                isIntentionalDisconnect = false; // reset para el próximo ciclo
-            }
-        }
-    });
-}
-
-// ── Express HTTP API ────────────────────────────────────────────────────────
+client.initialize();
 
 const app = express();
 app.use(express.json());
 
-/**
- * POST /send
- * Body: { "phone": "5491112345678", "message": "Hola!" }
- * 
- * El número debe incluir código de país sin '+', sin espacios.
- * Argentina: 549 + número de 10 dígitos (ej: 5491112345678)
- */
+// Endpoint POST /send
 app.post('/send', async (req, res) => {
     const { phone, message } = req.body;
 
@@ -127,226 +83,69 @@ app.post('/send', async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Faltan campos: phone y message son requeridos.' });
     }
 
-    // Conexión bajo demanda: si está desconectado, conectar y esperar
-    if (connectionStatus !== 'open') {
-        if (connectionStatus === 'disconnected') {
-            console.log('[WhatsApp] Conexión bajo demanda iniciada por /send...');
-            isIntentionalDisconnect = false;
-            connectToWhatsApp().catch(console.error);
-        }
-        const connected = await waitForConnection(30_000);
-        if (!connected) {
-            return res.status(503).json({
-                ok: false,
-                error: `WhatsApp no pudo conectarse en 30s. Estado: ${connectionStatus}. Verificá la sesión en GET /qr`
-            });
-        }
+    if (connectionStatus !== 'conectado') {
+        return res.status(503).json({ ok: false, error: `El servicio de WhatsApp no está conectado. Estado actual: ${connectionStatus}` });
     }
 
-    const jid = `${phone}@s.whatsapp.net`;
+    const chatId = `${phone}@c.us`;
 
     try {
-        // Simular "escribiendo..." por un tiempo proporcional al largo del mensaje + ruido aleatorio
-        const ruidoAleatorio = Math.floor(Math.random() * 801) - 400; // -400 a 400 ms
-        let typingMs = 1500 + (message.length * 30) + ruidoAleatorio;
-        // Clamp entre 1.5s y 15s
-        typingMs = Math.min(Math.max(typingMs, 1500), 15000);
-
-        await sock.sendPresenceUpdate('composing', jid);
-        await new Promise(r => setTimeout(r, typingMs));
-        
-        const result = await sock.sendMessage(jid, { text: message });
-        
-        // Volver inmediatamente a estado invisible
-        await sock.sendPresenceUpdate('unavailable');
-
-        const messageId = result?.key?.id ?? 'n/a';
-        console.log(`[WhatsApp] ✓ Enviado a ${phone} | ID: ${messageId}`);
-        return res.json({ ok: true, messageId });
+        const msg = await client.sendMessage(chatId, message);
+        console.log(`[WhatsApp] Mensaje enviado a ${phone}. Id: ${msg.id.id}`);
+        return res.json({ ok: true, messageId: msg.id.id });
     } catch (err) {
-        console.error(`[WhatsApp] Error enviando a ${phone}:`, err.message);
+        console.error(`[WhatsApp] Error al enviar a ${phone}:`, err.message);
         return res.status(500).json({ ok: false, error: err.message });
     }
 });
 
-/**
- * GET /qr
- * Muestra página HTML con el QR y auto-refresh cada 15 segundos.
- * GET /qr?raw=1  → devuelve solo la imagen PNG (para automatización).
- */
-app.get('/qr', async (req, res) => {
-    if (connectionStatus === 'open') {
-        return res.status(200).send('<h2>✅ WhatsApp ya está conectado.</h2>');
+// Endpoint GET /qr para ver el QR desde el navegador
+app.get('/qr', (req, res) => {
+    if (connectionStatus === 'conectado') {
+        return res.send('<h2>✅ WhatsApp ya está conectado y listo para usar.</h2>');
     }
-
-    if (!currentQR) {
-        // Sin QR aún: devolver página que recarga sola
-        return res.status(202).send(`
-            <!DOCTYPE html><html><head><meta charset="utf-8">
-            <meta http-equiv="refresh" content="5">
-            <title>QR WhatsApp</title></head><body>
-            <h2>⏳ Generando QR...</h2>
-            <p>Esta página se recargará automáticamente en 5 segundos.</p>
-            </body></html>`);
+    
+    if (!currentQRDataUrl) {
+        return res.send('<h2>⏳ Generando QR... Espera unos segundos y recarga la página.</h2>');
     }
-
-    // QR disponible
-    const qrAgeSeconds = Math.floor((Date.now() - qrTimestamp) / 1000);
-
-    if (req.query.raw === '1') {
-        // Modo imagen pura
-        try {
-            const buffer = await QRCode.toBuffer(currentQR, { scale: 8 });
-            res.setHeader('Content-Type', 'image/png');
-            return res.send(buffer);
-        } catch (err) {
-            return res.status(500).json({ ok: false, error: err.message });
-        }
-    }
-
-    // Modo HTML con auto-refresh
-    try {
-        const dataUrl = await QRCode.toDataURL(currentQR, { scale: 8 });
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.send(`
-            <!DOCTYPE html><html><head><meta charset="utf-8">
-            <meta http-equiv="refresh" content="15">
-            <title>QR WhatsApp</title>
-            <style>body{font-family:sans-serif;text-align:center;padding:2rem;background:#111;color:#eee}
-            img{border:8px solid white;border-radius:12px;max-width:300px}</style></head><body>
-            <h2>📱 Escaneá con WhatsApp</h2>
-            <p>WhatsApp → Dispositivos vinculados → Vincular dispositivo</p>
-            <img src="${dataUrl}" />
-            <p style="color:#aaa;font-size:.85rem">QR generado hace ${qrAgeSeconds}s · página se recarga cada 15s</p>
-            <p><a href="/reset" onclick="return confirm('¿Borrar sesión y generar nuevo QR?')" 
-               style="color:#f88">🔄 Resetear sesión y generar nuevo QR</a></p>
-            </body></html>`);
-    } catch (err) {
-        return res.status(500).json({ ok: false, error: err.message });
-    }
+    
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta http-equiv="refresh" content="10">
+            <title>Vincular WhatsApp</title>
+            <style>
+                body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f0f2f5; }
+                .container { display: inline-block; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+                img { border: 1px solid #ccc; border-radius: 5px; }
+                h2 { color: #075e54; }
+                p { color: #555; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>Vincular Servicio de Turnos</h2>
+                <p>Escanea este código QR desde tu celular (Dispositivos vinculados -> Vincular un dispositivo):</p>
+                <img src="${currentQRDataUrl}" alt="Código QR de WhatsApp" />
+                <p style="font-size: 12px; color: #888;">La página se actualiza automáticamente cada 10 segundos.</p>
+            </div>
+        </body>
+        </html>
+    `);
 });
 
-/**
- * POST /disconnect
- * Desconecta el socket de WhatsApp sin borrar la sesión.
- * El Worker lo llama al finalizar cada ciclo de envío para no quedar "en línea".
- */
-app.post('/disconnect', async (_req, res) => {
-    if (!sock || connectionStatus === 'disconnected') {
-        connectionStatus = 'disconnected';
-        return res.json({ ok: true, message: 'Ya estaba desconectado.' });
-    }
-    try {
-        isIntentionalDisconnect = true;
-        sock.ev.removeAllListeners();
-        sock.ws.close(); // Cierra el WebSocket sin borrar la sesión
-        sock = null;
-        connectionStatus = 'disconnected';
-        console.log('[WhatsApp] 🔌 Desconectado por solicitud del Worker. Se reconectará en el próximo ciclo.');
-        return res.json({ ok: true, message: 'Desconectado correctamente.' });
-    } catch (err) {
-        isIntentionalDisconnect = false;
-        console.error('[WhatsApp] Error al desconectar:', err.message);
-        return res.status(500).json({ ok: false, error: err.message });
-    }
-});
-
-/**
- * GET /connect
- * Fuerza la conexión manualmente (útil para escanear QR en sesión nueva).
- */
-app.get('/connect', (_req, res) => {
-    if (connectionStatus === 'open') {
-        return res.json({ ok: true, message: 'Ya conectado.' });
-    }
-    if (connectionStatus !== 'connecting') {
-        isIntentionalDisconnect = false;
-        connectToWhatsApp().catch(console.error);
-    }
-    return res.json({ ok: true, message: 'Conexión iniciada. Visitá /qr si necesitás escanear el código.' });
-});
-
-/**
- * POST /reset
- * Borra auth_session y fuerza reconexión completa generando un QR nuevo.
- * Útil cuando el QR expiró o la sesión quedó en estado inválido.
- */
-app.post('/reset', (_req, res) => doReset(res));
-
-/**
- * GET /reset  (acceso desde browser con confirmación en /qr)
- */
-async function doReset(res) {
-    console.log('[WhatsApp] 🔄 Reset solicitado — borrando sesión...');
-
-    try {
-        if (sock) {
-            sock.ev.removeAllListeners();
-            await sock.logout().catch(() => {});
-            sock = null;
-        }
-    } catch (_) {}
-
-    currentQR = null;
-    qrTimestamp = null;
-    connectionStatus = 'disconnected';
-
-    try {
-        if (existsSync(AUTH_DIR)) {
-            rmSync(AUTH_DIR, { recursive: true, force: true });
-            console.log('[WhatsApp] Sesión borrada.');
-        }
-    } catch (err) {
-        console.error('[WhatsApp] Error borrando sesión:', err.message);
-        return res.status(500).json({ ok: false, error: err.message });
-    }
-
-    setTimeout(() => connectToWhatsApp().catch(console.error), 500);
-    return res.json({ ok: true, message: 'Sesión reseteada. Nuevo QR disponible en GET /qr en ~5 segundos.' });
-}
-
-app.get('/reset', (_req, res) => doReset(res));
-
-/**
- * GET /status
- * Estado actual de la conexión.
- */
+// Endpoint GET /status
 app.get('/status', (_req, res) => {
     res.json({
         ok: true,
         status: connectionStatus,
-        number: sock?.user?.id ?? null
+        number: authenticatedNumber
     });
 });
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Espera hasta que la conexión esté 'open' o se agote el timeout.
- * @param {number} timeoutMs - Tiempo máximo de espera en ms (default: 30s)
- * @returns {Promise<boolean>} - true si se conectó, false si se agotó el tiempo
- */
-function waitForConnection(timeoutMs = 30_000) {
-    return new Promise((resolve) => {
-        if (connectionStatus === 'open') return resolve(true);
-        const interval = setInterval(() => {
-            if (connectionStatus === 'open') {
-                clearInterval(interval);
-                clearTimeout(timeout);
-                resolve(true);
-            }
-        }, 500);
-        const timeout = setTimeout(() => {
-            clearInterval(interval);
-            resolve(false);
-        }, timeoutMs);
-    });
-}
-
-// ── Inicio ──────────────────────────────────────────────────────────────────
-
 app.listen(PORT, () => {
-    console.log(`[HTTP] Servicio WhatsApp (Baileys) escuchando en http://localhost:${PORT}`);
-    console.log(`[HTTP] Endpoints: POST /send | POST /disconnect | GET /connect | GET /qr | GET /status`);
-    console.log(`[HTTP] Conexión a WhatsApp se iniciará bajo demanda (POST /send o GET /connect)`);
+    console.log(`[HTTP] Servicio de WhatsApp escuchando en puerto ${PORT}`);
+    console.log(`[HTTP] Accede a http://localhost:${PORT}/qr para vincular tu cuenta`);
 });

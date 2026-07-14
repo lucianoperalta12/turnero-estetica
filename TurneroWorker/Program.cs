@@ -18,6 +18,7 @@ builder.Services.AddHttpClient();
 
 // ── Servicios (Scoped: se crea un scope por ciclo de ejecución en Worker) ────
 builder.Services.AddScoped<GoogleCalendarService>();
+builder.Services.AddScoped<GoogleSheetsService>();
 builder.Services.AddScoped<WhatsAppService>();
 builder.Services.AddScoped<ReminderService>();
 
