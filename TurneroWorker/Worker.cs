@@ -34,9 +34,6 @@ public class Worker : BackgroundService
         {
             var (proximo, delay) = CalcularProximaEjecucion();
 
-            _logger.LogInformation("Próxima ejecución: {Proximo} (en {Delay:hh\\:mm\\:ss})",
-                proximo.ToString("yyyy-MM-dd HH:mm"), delay);
-
             try
             {
                 await Task.Delay(delay, stoppingToken);
@@ -58,43 +55,58 @@ public class Worker : BackgroundService
     }
 
     /// <summary>
-    /// Calcula cuánto tiempo falta hasta el próximo horario configurado (en zona horaria local).
-    /// Si todos los horarios de hoy ya pasaron, calcula el primero del día siguiente.
+    /// Calcula cuánto tiempo falta hasta el próximo horario configurado (zona: <see cref="_tz"/>).
+    /// Los ExecutionTimes duplicados se ignoran. El delay se calcula en UTC para que
+    /// Task.Delay sea correcto independientemente de la zona del sistema operativo.
     /// </summary>
-    private (DateTime proximoUtc, TimeSpan delay) CalcularProximaEjecucion()
+    private (DateTime proxLocal, TimeSpan delay) CalcularProximaEjecucion()
     {
-        var ahoraUtc = DateTime.UtcNow;
-        var ahoraLocal = TimeZoneInfo.ConvertTimeFromUtc(ahoraUtc, _tz);
+        var ahoraSystem = DateTimeOffset.Now;
+        var ahoraUtc    = ahoraSystem.UtcDateTime;
+        var ahoraLocal  = TimeZoneInfo.ConvertTimeFromUtc(ahoraUtc, _tz);
 
-        var candidatos = new List<DateTime>();
+        // Deduplicar, parsear y ordenar los horarios configurados
+        var horasValidas = _scheduleConfig.ExecutionTimes
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(s => TimeOnly.TryParse(s, out var t) ? (TimeOnly?)t : null)
+            .Where(t => t.HasValue)
+            .Select(t => t!.Value)
+            .OrderBy(t => t)
+            .ToList();
 
-        foreach (var timeStr in _scheduleConfig.ExecutionTimes)
-        {
-            if (!TimeOnly.TryParse(timeStr, out var hora)) continue;
-
-            // Candidato hoy
-            var candidatoHoy = ahoraLocal.Date.Add(hora.ToTimeSpan());
-            if (candidatoHoy > ahoraLocal)
-                candidatos.Add(candidatoHoy);
-
-            // Candidato mañana (para cuando todos los de hoy pasaron)
-            candidatos.Add(ahoraLocal.Date.AddDays(1).Add(hora.ToTimeSpan()));
-        }
-
-        if (candidatos.Count == 0)
+        if (horasValidas.Count == 0)
         {
             _logger.LogWarning("No se pudieron parsear los ExecutionTimes. Reintentando en 1 hora.");
-            return (ahoraUtc.AddHours(1), TimeSpan.FromHours(1));
+            return (ahoraLocal.AddHours(1), TimeSpan.FromHours(1));
         }
 
-        var proxLocal = candidatos.Min();
-        var proxUtc = TimeZoneInfo.ConvertTimeToUtc(proxLocal, _tz);
-        var delay = proxUtc - ahoraUtc;
+        // Primer horario futuro de hoy; si todos pasaron, el primero de mañana
+        DateTime? proxLocal = null;
+        foreach (var hora in horasValidas)
+        {
+            var candidato = ahoraLocal.Date.Add(hora.ToTimeSpan());
+            if (candidato > ahoraLocal)
+            {
+                proxLocal = candidato;
+                break;
+            }
+        }
+        proxLocal ??= ahoraLocal.Date.AddDays(1).Add(horasValidas[0].ToTimeSpan());
 
-        if (delay <= TimeSpan.Zero)
-            delay = TimeSpan.FromSeconds(1);
+        // Delay basado en UTC para que Task.Delay sea exacto
+        var proxUtc = TimeZoneInfo.ConvertTimeToUtc(proxLocal.Value, _tz);
+        var delay   = proxUtc - ahoraUtc;
+        if (delay <= TimeSpan.Zero) delay = TimeSpan.FromSeconds(1);
 
-        return (proxUtc, delay);
+        _logger.LogInformation(
+            "[Scheduler] Hora sistema: {Sistema} | Hora {TZ}: {Local} | Próxima ejecución: {Proximo} (en {Delay:hh\\:mm\\:ss})",
+            ahoraSystem.ToString("yyyy-MM-dd HH:mm:ss zzz"),
+            _tz.Id,
+            ahoraLocal.ToString("yyyy-MM-dd HH:mm:ss"),
+            proxLocal.Value.ToString("yyyy-MM-dd HH:mm"),
+            delay);
+
+        return (proxLocal.Value, delay);
     }
 
     private static TimeZoneInfo GetTimeZoneInfo(string tzId)
