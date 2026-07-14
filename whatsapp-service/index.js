@@ -146,8 +146,11 @@ app.post('/send', async (req, res) => {
     const jid = `${phone}@s.whatsapp.net`;
 
     try {
-        // Simular "escribiendo..." solo por 1-2 segundos
-        const typingMs = 1000 + Math.floor(Math.random() * 1000); // 1000 a 2000 ms
+        // Simular "escribiendo..." por un tiempo proporcional al largo del mensaje + ruido aleatorio
+        const ruidoAleatorio = Math.floor(Math.random() * 801) - 400; // -400 a 400 ms
+        let typingMs = 1500 + (message.length * 30) + ruidoAleatorio;
+        // Clamp entre 1.5s y 15s
+        typingMs = Math.min(Math.max(typingMs, 1500), 15000);
 
         await sock.sendPresenceUpdate('composing', jid);
         await new Promise(r => setTimeout(r, typingMs));
