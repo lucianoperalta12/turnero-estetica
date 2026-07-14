@@ -17,8 +17,8 @@ const AUTH_DIR = join(__dirname, 'auth_session');
 const QR_PATH  = join(__dirname, 'qr.png');
 const PORT     = process.env.PORT || 3000;
 
-// Logger silencioso para producción
-const logger = pino({ level: 'silent' });
+// Logger en consola para diagnosticar en el VPS
+const logger = pino({ level: 'info' });
 
 let sock = null;
 let connectionStatus = 'esperando QR'; // 'esperando QR', 'autenticando', 'conectado', 'desconectado'
@@ -27,75 +27,80 @@ let qrTimestamp = null;
 let authenticatedNumber = null;
 
 async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-    const { version } = await fetchLatestBaileysVersion();
+    try {
+        const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+        const { version } = await fetchLatestBaileysVersion();
 
-    console.log(`[WhatsApp] Iniciando cliente (versión del protocolo Baileys: ${version.join('.')})`);
+        console.log(`[WhatsApp] Iniciando cliente (versión del protocolo Baileys: ${version.join('.')})`);
 
-    sock = makeWASocket({
-        version,
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, logger)
-        },
-        printQRInTerminal: false,
-        logger,
-        browser: ['Mac OS', 'Chrome', '121.0.0'],
-        markOnlineOnConnect: false,
-        syncFullHistory: false
-    });
+        sock = makeWASocket({
+            version,
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, logger)
+            },
+            printQRInTerminal: false,
+            logger,
+            browser: ['Mac OS', 'Chrome', '121.0.0'],
+            markOnlineOnConnect: false,
+            syncFullHistory: false
+        });
 
-    sock.ev.on('creds.update', saveCreds);
+        sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
-            currentQR = qr;
-            qrTimestamp = Date.now();
-            connectionStatus = 'esperando QR';
-            console.log(`[WhatsApp] [${new Date().toLocaleTimeString()}] Nuevo código QR generado. Disponible en http://localhost:${PORT}/qr`);
-            
-            try {
-                await QRCode.toFile(QR_PATH, qr, { scale: 8 });
-            } catch (err) {
-                // Ignorar errores al guardar archivo local
+            if (qr) {
+                currentQR = qr;
+                qrTimestamp = Date.now();
+                connectionStatus = 'esperando QR';
+                console.log(`[WhatsApp] [${new Date().toLocaleTimeString()}] Nuevo código QR generado.`);
+                
+                try {
+                    await QRCode.toFile(QR_PATH, qr, { scale: 8 });
+                } catch (err) {
+                    console.error('[WhatsApp] Error al guardar QR físico:', err.message);
+                }
             }
-        }
 
-        if (connection === 'open') {
-            currentQR = null;
-            connectionStatus = 'conectado';
-            authenticatedNumber = sock.user?.id?.split(':')[0] || sock.user?.id;
-            console.log(`[WhatsApp] Estado: Conectado. Número: ${authenticatedNumber}`);
+            if (connection === 'open') {
+                currentQR = null;
+                connectionStatus = 'conectado';
+                authenticatedNumber = sock.user?.id?.split(':')[0] || sock.user?.id;
+                console.log(`[WhatsApp] Estado: Conectado. Número: ${authenticatedNumber}`);
 
-            sock.sendPresenceUpdate('unavailable').catch(() => {});
+                sock.sendPresenceUpdate('unavailable').catch(() => {});
 
-            if (existsSync(QR_PATH)) {
-                try { writeFileSync(QR_PATH, ''); } catch (_) {}
+                if (existsSync(QR_PATH)) {
+                    try { writeFileSync(QR_PATH, ''); } catch (_) {}
+                }
             }
-        }
 
-        if (connection === 'close') {
-            connectionStatus = 'desconectado';
-            authenticatedNumber = null;
-            currentQR = null;
+            if (connection === 'close') {
+                connectionStatus = 'desconectado';
+                authenticatedNumber = null;
+                currentQR = null;
 
-            const statusCode = (lastDisconnect?.error instanceof Boom)
-                ? lastDisconnect.error.output.statusCode
-                : null;
-            
-            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-            console.warn(`[WhatsApp] Conexión cerrada. Código: ${statusCode}.`);
+                const error = lastDisconnect?.error;
+                const statusCode = (error instanceof Boom)
+                    ? error.output.statusCode
+                    : null;
+                
+                const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+                console.warn(`[WhatsApp] Conexión cerrada. Código: ${statusCode}. Detalle del error:`, error);
 
-            if (isLoggedOut) {
-                console.error('[WhatsApp] Sesión cerrada. Por favor elimina auth_session/ y reinicia.');
-            } else {
-                console.log('[WhatsApp] Intentando reconectar en 3 segundos...');
-                setTimeout(connectToWhatsApp, 3000);
+                if (isLoggedOut) {
+                    console.error('[WhatsApp] Sesión cerrada. Por favor elimina auth_session/ y reinicia.');
+                } else {
+                    console.log('[WhatsApp] Intentando reconectar en 3 segundos...');
+                    setTimeout(connectToWhatsApp, 3000);
+                }
             }
-        }
-    });
+        });
+    } catch (err) {
+        console.error('[WhatsApp] Error crítico en connectToWhatsApp:', err);
+    }
 }
 
 // Iniciar conexión inicial
