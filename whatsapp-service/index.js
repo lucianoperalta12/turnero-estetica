@@ -239,7 +239,7 @@ app.post('/disconnect', async (_req, res) => {
     try {
         isIntentionalDisconnect = true;
         sock.ev.removeAllListeners();
-        await sock.logout().catch(() => {});
+        sock.ws.close(); // Cierra el WebSocket sin borrar la sesión
         sock = null;
         connectionStatus = 'disconnected';
         console.log('[WhatsApp] 🔌 Desconectado por solicitud del Worker. Se reconectará en el próximo ciclo.');
@@ -348,10 +348,5 @@ function waitForConnection(timeoutMs = 30_000) {
 app.listen(PORT, () => {
     console.log(`[HTTP] Servicio WhatsApp (Baileys) escuchando en http://localhost:${PORT}`);
     console.log(`[HTTP] Endpoints: POST /send | POST /disconnect | GET /connect | GET /qr | GET /status`);
-});
-
-// Conectar al iniciar para restaurar sesión guardada o generar QR
-connectToWhatsApp().catch((err) => {
-    console.error('[WhatsApp] Error fatal al iniciar:', err);
-    process.exit(1);
+    console.log(`[HTTP] Conexión a WhatsApp se iniciará bajo demanda (POST /send o GET /connect)`);
 });
