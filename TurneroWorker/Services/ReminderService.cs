@@ -82,7 +82,9 @@ public class ReminderService
             var clave = turno.Nombre.Trim().ToLowerInvariant();
             if (!directorio.TryGetValue(clave, out var telefono))
             {
-                _logger.LogWarning("Paciente '{Nombre}' NO encontrado en el directorio de Google Sheets. Notificando al admin.", turno.Nombre);
+                var nombresDisponibles = string.Join(", ", directorio.Keys);
+                _logger.LogWarning("Paciente '{Nombre}' (buscando clave: '{Clave}') NO encontrado en el directorio de Google Sheets.", turno.Nombre, clave);
+                _logger.LogWarning("Claves disponibles en el Sheet: [{NombresDisponibles}]", nombresDisponibles);
                 noEncontrados++;
 
                 // Notificar al administrador si está configurado
