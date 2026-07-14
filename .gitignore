@@ -24,3 +24,7 @@ whatsapp-service/qr.png
 *.suo
 *.user
 *.sln.docstates
+
+# Compilación y publicación
+TurneroWorker/publish/
+**/publish/
