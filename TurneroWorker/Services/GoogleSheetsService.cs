@@ -66,8 +66,6 @@ public class GoogleSheetsService
 
         foreach (var fila in filas)
         {
-                _logger.LogInformation("Fila leída: {Fila}", string.Join(" | ", fila));
-                
             if (fila.Count < 2) continue;
 
             var nombre = fila[0]?.ToString()?.Trim() ?? string.Empty;
@@ -75,7 +73,7 @@ public class GoogleSheetsService
 
             if (string.IsNullOrEmpty(nombre) || string.IsNullOrEmpty(telefono))
             {
-                _logger.LogDebug("Fila omitida: nombre='{Nombre}', telefono='{Tel}'", nombre, telefono);
+                _logger.LogDebug("Fila omitida por vacía: nombre='{Nombre}', telefono='{Tel}'", nombre, telefono);
                 continue;
             }
 
@@ -93,6 +91,7 @@ public class GoogleSheetsService
                 continue;
             }
 
+            _logger.LogInformation("Contacto cargado: '{Nombre}' -> original: '{Telefono}' -> normalizado: '{TelefonoNormalizado}'", nombre, telefono, telefonoNormalizado);
             directorio[clave] = telefonoNormalizado;
         }
 

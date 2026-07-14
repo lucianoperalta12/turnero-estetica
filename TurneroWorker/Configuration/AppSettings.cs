@@ -19,9 +19,9 @@ public class GoogleSheetsConfig
     public string SpreadsheetId { get; set; } = string.Empty;
     /// <summary>
     /// Rango de la hoja. Columna A = Nombre, Columna B = Teléfono.
-    /// Empieza en A2 para saltear el encabezado.
+    /// Empieza en A1 asumiendo que no tiene encabezado.
     /// </summary>
-    public string Range { get; set; } = "'Hoja 1'!A2:B";
+    public string Range { get; set; } = "'Hoja 1'!A1:B";
 }
 
 public class WhatsAppConfig
