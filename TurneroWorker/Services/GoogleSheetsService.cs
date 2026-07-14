@@ -66,6 +66,8 @@ public class GoogleSheetsService
 
         foreach (var fila in filas)
         {
+                _logger.LogInformation("Fila leída: {Fila}", string.Join(" | ", fila));
+                
             if (fila.Count < 2) continue;
 
             var nombre = fila[0]?.ToString()?.Trim() ?? string.Empty;
