@@ -75,6 +75,11 @@ async function connectToWhatsApp() {
             connectionStatus = 'open';
             console.log('[WhatsApp] ✓ Conectado como:', sock.user?.id);
 
+            // Forzar inmediatamente el estado a invisible
+            sock.sendPresenceUpdate('unavailable').catch(err => {
+                console.error('[WhatsApp] Error al setear presence unavailable:', err.message);
+            });
+
             // Limpiar QR PNG ya no necesario
             if (existsSync(QR_PATH)) {
                 try { writeFileSync(QR_PATH, ''); } catch (_) {}
@@ -141,17 +146,17 @@ app.post('/send', async (req, res) => {
     const jid = `${phone}@s.whatsapp.net`;
 
     try {
-        // Simular "escribiendo..." por un tiempo proporcional al largo del mensaje + ruido aleatorio
-        const ruidoAleatorio = Math.floor(Math.random() * 801) - 400; // -400 a 400 ms
-        let typingMs = 1500 + (message.length * 30) + ruidoAleatorio;
-        // Clamp entre 1.5s y 15s
-        typingMs = Math.min(Math.max(typingMs, 1500), 15000);
+        // Simular "escribiendo..." solo por 1-2 segundos
+        const typingMs = 1000 + Math.floor(Math.random() * 1000); // 1000 a 2000 ms
 
         await sock.sendPresenceUpdate('composing', jid);
         await new Promise(r => setTimeout(r, typingMs));
-        await sock.sendPresenceUpdate('paused', jid);
-
+        
         const result = await sock.sendMessage(jid, { text: message });
+        
+        // Volver inmediatamente a estado invisible
+        await sock.sendPresenceUpdate('unavailable');
+
         const messageId = result?.key?.id ?? 'n/a';
         console.log(`[WhatsApp] ✓ Enviado a ${phone} | ID: ${messageId}`);
         return res.json({ ok: true, messageId });
