@@ -74,6 +74,25 @@ public class WhatsAppService
     }
 
     /// <summary>
+    /// Llama a POST /disconnect en el microservicio para cerrar la sesión de WhatsApp
+    /// y evitar que el número quede visible como "en línea" entre ciclos de envío.
+    /// </summary>
+    public async Task DesconectarAsync()
+    {
+        var url = $"{_config.BaseUrl.TrimEnd('/')}/disconnect";
+        using var client = _httpClientFactory.CreateClient();
+        try
+        {
+            var response = await client.PostAsync(url, null);
+            _logger.LogInformation("WhatsApp desconectado tras ciclo. Estado HTTP: {Status}", (int)response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "No se pudo desconectar el servicio WhatsApp en {Url}", url);
+        }
+    }
+
+    /// <summary>
     /// Normaliza el teléfono
     /// </summary>
     private static string NormalizarTelefono(string telefono)
