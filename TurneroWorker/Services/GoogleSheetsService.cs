@@ -103,55 +103,78 @@ public class GoogleSheetsService
     /// </summary>
     private static string? NormalizarTelefonoArgentino(string raw)
     {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+
         // Limpiar caracteres no numéricos
         var soloDigitos = new string(raw.Where(char.IsDigit).ToArray());
 
-        if (string.IsNullOrEmpty(soloDigitos)) return null;
-
-        // Si ya tiene el prefijo de país completo 549 seguido de 10 dígitos (total 13 caracteres)
-        if (soloDigitos.StartsWith("549") && soloDigitos.Length == 13)
-        {
-            return soloDigitos;
-        }
-
-        // Si empieza con 54 pero le falta el '9' de celular internacional (ej. 54 3564 562288 tiene largo 12)
-        if (soloDigitos.StartsWith("54") && soloDigitos.Length == 12)
-        {
-            return "549" + soloDigitos[2..];
-        }
-
-        // Si es un número local de 10 dígitos (ej. 3564562288 o 0356415562288)
-        // Quitamos el '0' del código de área si estuviera
+        // Si empieza con 0, remover el 0 inicial (ej: 03564... -> 3564...)
         if (soloDigitos.StartsWith('0'))
         {
             soloDigitos = soloDigitos[1..];
         }
 
-        // Si contiene el '15' de celular local (ej. prefijo 3564 + 15 + número 562288 -> largo 12)
-        // Intentar remover el '15'
-        if (soloDigitos.Length == 12 && soloDigitos.Substring(4, 2) == "15")
+        // Si ya empieza con 549 y tiene el largo correcto (13 dígitos), es correcto
+        if (soloDigitos.StartsWith("549") && soloDigitos.Length == 13)
         {
-            soloDigitos = soloDigitos.Remove(4, 2);
+            return soloDigitos;
         }
 
-        // El número estándar sin 0 y sin 15 debe tener 10 dígitos
+        // Si empieza con 54 pero no tiene el 9 de móvil (ej: 543564562288, largo 12) -> transformamos a 549...
+        if (soloDigitos.StartsWith("54") && soloDigitos.Length == 12)
+        {
+            return "549" + soloDigitos[2..];
+        }
+
+        // Si empieza con 54 y tiene largo 10 (sin el 9 y sin el 54 real en formato correcto),
+        // o si es un número local de 10 dígitos (ej: 3564562288)
         if (soloDigitos.Length == 10)
         {
             return "549" + soloDigitos;
         }
 
-        // Si ya está normalizado de alguna otra forma o tiene largo no esperado, intentamos retornarlo tal cual si parece válido
+        // Si tiene 12 dígitos y contiene un "15" (celular local argentino clásico, ej: 356415562288)
+        // El "15" suele estar después del código de área. San Francisco es 3564 (4 dígitos).
+        // En códigos de área de 3 dígitos (ej: 341 - Rosario) el 15 está en la posición 3.
+        // Un enfoque seguro: si detectamos "15" y removiéndolo nos da un número de 10 dígitos.
+        if (soloDigitos.Length == 12)
+        {
+            // Intentar detectar y remover el 15 del medio
+            // Probamos si removiendo el 15 de la posición típica de 4 dígitos de área
+            var sin15De4 = soloDigitos.Remove(4, 2);
+            if (sin15De4.Length == 10)
+            {
+                return "549" + sin15De4;
+            }
+
+            // Probamos si es de 3 dígitos de área
+            var sin15De3 = soloDigitos.Remove(3, 2);
+            if (sin15De3.Length == 10)
+            {
+                return "549" + sin15De3;
+            }
+
+            // Probamos si es de 2 dígitos de área (ej: 11 - BsAs)
+            var sin15De2 = soloDigitos.Remove(2, 2);
+            if (sin15De2.Length == 10)
+            {
+                return "549" + sin15De2;
+            }
+        }
+
+        // Fallback robusto: si no coincide con las anteriores pero tiene entre 10 y 13 dígitos
         if (soloDigitos.Length >= 10 && soloDigitos.Length <= 13)
         {
-            if (!soloDigitos.StartsWith("549"))
+            if (soloDigitos.StartsWith("549")) return soloDigitos;
+            if (soloDigitos.StartsWith("54")) return "549" + soloDigitos[2..];
+            
+            // Si tiene 11 dígitos y empieza con 9 (ej: 93564562288) -> transformamos a 549...
+            if (soloDigitos.StartsWith('9') && soloDigitos.Length == 11)
             {
-                if (soloDigitos.StartsWith("54"))
-                {
-                    return "549" + soloDigitos[2..];
-                }
-                return "549" + soloDigitos;
+                return "54" + soloDigitos;
             }
-            return soloDigitos;
+
+            return "549" + soloDigitos;
         }
 
         return null;
