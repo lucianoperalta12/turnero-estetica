@@ -148,14 +148,17 @@ app.post('/send', async (req, res) => {
                     jid = `${cleanPhone}@s.whatsapp.net`;
                 }
 
-                // Validar número
-                console.log(`[Baileys] [${new Date().toISOString()}] Validando existencia de número en WhatsApp (onWhatsApp): ${jid}`);
-                const [onWaResult] = await sock.onWhatsApp(jid);
-                if (!onWaResult || !onWaResult.exists) {
-                    console.warn(`[Baileys] El número ${jid} no está registrado en WhatsApp.`);
-                    throw new Error(`El número ${jid} no existe en WhatsApp.`);
+                // Validar número (sólo para destinatarios normales, no hace falta validar nuestro propio número)
+                if (!isSpecialRecipient) {
+                    console.log(`[Baileys] [${new Date().toISOString()}] Validando existencia de número en WhatsApp (onWhatsApp): ${jid}`);
+                    const [onWaResult] = await sock.onWhatsApp(jid);
+                    if (!onWaResult || !onWaResult.exists) {
+                        const cleanPhone = phone.replace(/\D/g, '');
+                        console.warn(`[Baileys] El número ${cleanPhone} no está registrado en WhatsApp.`);
+                        throw new Error(`El número ${cleanPhone} no existe en WhatsApp.`);
+                    }
+                    console.log(`[Baileys] [${new Date().toISOString()}] Número validado con éxito.`);
                 }
-                console.log(`[Baileys] [${new Date().toISOString()}] Número validado con éxito.`);
 
                 // Enviar mensaje
                 console.log(`[Baileys] [${new Date().toISOString()}] Inicio de llamada sendMessage a ${jid}...`);
@@ -277,7 +280,7 @@ app.get('/qr', async (req, res) => {
                 if (sock) {
                     try { sock.end(); } catch (e) {}
                 }
-                console.log('[Mutex] Bloqueo liberado de flujo de QR.');
+                console.log('[Mutex] Blockeo liberado de flujo de QR.');
             }
         }).catch(err => {
             console.error('[Mutex] Error en ejecución Mutex de QR:', err.stack || err);
