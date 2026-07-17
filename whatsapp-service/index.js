@@ -142,41 +142,59 @@ app.post('/send', async (req, res) => {
                 }
                 console.log(`[Baileys] [${new Date().toISOString()}] Número validado con éxito.`);
 
-                // Enviar mensaje e inicio de espera de confirmación
-                console.log(`[Baileys] [${new Date().toISOString()}] Inicio de sendMessage a ${cleanPhone}...`);
-                const sendResponse = await sock.sendMessage(jid, { text: message });
-                const messageId = sendResponse?.key?.id;
-                console.log(`[Baileys] [${new Date().toISOString()}] Fin de llamada sendMessage. ID asignado: ${messageId}`);
+                // Controlar confirmación de servidor (ACK >= 2) mitigando race conditions
+                let messageId = null;
+                let ackReceived = false;
+                let resolveAckPromise, rejectAckPromise;
 
-                console.log(`[Baileys] [${new Date().toISOString()}] Esperando confirmación de entrega (ACK >= 2) del servidor para ID: ${messageId}...`);
-
-                // Esperamos la confirmación del servidor (ACK status >= 2)
-                await new Promise((resolve, reject) => {
-                    const ackTimeout = setTimeout(() => {
-                        sock.ev.off('messages.update', updateListener);
-                        reject(new Error('TIMEOUT_WAITING_ACK'));
-                    }, 12000); // 12 segundos máximo de espera por ACK del servidor
-
-                    const updateListener = (updates) => {
-                        for (const update of updates) {
-                            if (update.key.id === messageId) {
-                                const status = update.update.status;
-                                console.log(`[Baileys] [${new Date().toISOString()}] Recepción de evento de confirmación. ID: ${messageId}, Status: ${status}`);
-                                
-                                // Status 2 es SERVER_ACK (mensaje recibido en el servidor de WhatsApp)
-                                if (status >= 2) {
-                                    clearTimeout(ackTimeout);
-                                    sock.ev.off('messages.update', updateListener);
-                                    resolve();
-                                }
-                            }
-                        }
-                    };
-
-                    sock.ev.on('messages.update', updateListener);
+                const ackPromise = new Promise((resolve, reject) => {
+                    resolveAckPromise = resolve;
+                    rejectAckPromise = reject;
                 });
 
-                console.log(`[Baileys] [${new Date().toISOString()}] Servidor de WhatsApp confirmó entrega (ACK recibido).`);
+                const updateListener = (updates) => {
+                    for (const update of updates) {
+                        // Validar si el evento pertenece a nuestro mensaje enviado
+                        if (messageId && update.key.id === messageId) {
+                            const status = update.update.status;
+                            console.log(`[Baileys] [${new Date().toISOString()}] Recepción de evento de confirmación. ID: ${messageId}, Status: ${status}`);
+                            
+                            // Status >= 2 significa que el servidor de WhatsApp procesó el mensaje (SERVER_ACK)
+                            if (status >= 2) {
+                                ackReceived = true;
+                                resolveAckPromise();
+                            }
+                        }
+                    }
+                };
+
+                // Registramos el listener ANTES de disparar el envío
+                sock.ev.on('messages.update', updateListener);
+
+                try {
+                    console.log(`[Baileys] [${new Date().toISOString()}] Inicio de llamada sendMessage a ${cleanPhone}...`);
+                    const sendResponse = await sock.sendMessage(jid, { text: message });
+                    messageId = sendResponse?.key?.id;
+                    console.log(`[Baileys] [${new Date().toISOString()}] Fin de llamada sendMessage. ID asignado: ${messageId}`);
+
+                    // Si el ACK todavía no se procesó, esperamos la promesa con un timeout
+                    if (!ackReceived) {
+                        console.log(`[Baileys] [${new Date().toISOString()}] Esperando confirmación de entrega (ACK >= 2) del servidor...`);
+                        
+                        const ackTimeout = setTimeout(() => {
+                            rejectAckPromise(new Error('TIMEOUT_WAITING_ACK'));
+                        }, 12000); // 12 segundos máximo de espera
+
+                        await ackPromise;
+                        clearTimeout(ackTimeout);
+                    }
+
+                    console.log(`[Baileys] [${new Date().toISOString()}] Servidor de WhatsApp confirmó entrega (ACK recibido).`);
+
+                } finally {
+                    // Remover el listener del socket
+                    sock.ev.off('messages.update', updateListener);
+                }
 
                 // Darle 2 segundos de gracia al sistema para que escriba las actualizaciones
                 // de cifrado (keys/prekeys) en el disco antes de matar el socket.
