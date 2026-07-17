@@ -62,14 +62,11 @@ app.post('/send', async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Faltan campos obligatorios: phone y message.' });
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
-    const jid = `${cleanPhone}@s.whatsapp.net`;
-
-    console.log(`[HTTP] [${new Date().toISOString()}] Petición recibida para enviar a ${cleanPhone}`);
+    console.log(`[HTTP] [${new Date().toISOString()}] Petición recibida para enviar a ${phone}`);
 
     try {
         const sendResult = await lock.runExclusive(async () => {
-            console.log(`[Mutex] [${new Date().toISOString()}] Bloqueo adquirido para procesar envío a ${cleanPhone}`);
+            console.log(`[Mutex] [${new Date().toISOString()}] Bloqueo adquirido para procesar envío a ${phone}`);
 
             if (!fs.existsSync(join(AUTH_DIR, 'creds.json'))) {
                 console.warn('[WhatsApp] No existen credenciales guardadas (creds.json). Requiere vinculación.');
@@ -133,17 +130,35 @@ app.post('/send', async (req, res) => {
                     sock.ev.on('connection.update', updateHandler);
                 });
 
+                // Resolver JID destino
+                let jid;
+                const isSpecialRecipient = (phone.toLowerCase() === 'admin' || phone.toLowerCase() === 'self');
+                
+                if (isSpecialRecipient) {
+                    // Si el destino es 'self' o 'admin', enviamos al propio número vinculado en la sesión
+                    const selfNumber = sock.user?.id?.split(':')[0] || sock.user?.id;
+                    if (!selfNumber) {
+                        throw new Error('No se pudo determinar el propio número de la sesión.');
+                    }
+                    const cleanSelf = selfNumber.split('@')[0].split(':')[0];
+                    jid = `${cleanSelf}@s.whatsapp.net`;
+                    console.log(`[Baileys] Destinatario especial detectado ('${phone}'). Enviando mensaje a uno mismo: ${jid}`);
+                } else {
+                    const cleanPhone = phone.replace(/\D/g, '');
+                    jid = `${cleanPhone}@s.whatsapp.net`;
+                }
+
                 // Validar número
                 console.log(`[Baileys] [${new Date().toISOString()}] Validando existencia de número en WhatsApp (onWhatsApp): ${jid}`);
                 const [onWaResult] = await sock.onWhatsApp(jid);
                 if (!onWaResult || !onWaResult.exists) {
-                    console.warn(`[Baileys] El número ${cleanPhone} no está registrado en WhatsApp.`);
-                    throw new Error(`El número ${cleanPhone} no existe en WhatsApp.`);
+                    console.warn(`[Baileys] El número ${jid} no está registrado en WhatsApp.`);
+                    throw new Error(`El número ${jid} no existe en WhatsApp.`);
                 }
                 console.log(`[Baileys] [${new Date().toISOString()}] Número validado con éxito.`);
 
                 // Enviar mensaje
-                console.log(`[Baileys] [${new Date().toISOString()}] Inicio de llamada sendMessage a ${cleanPhone}...`);
+                console.log(`[Baileys] [${new Date().toISOString()}] Inicio de llamada sendMessage a ${jid}...`);
                 const sendResponse = await sock.sendMessage(jid, { text: message });
                 const messageId = sendResponse?.key?.id;
                 console.log(`[Baileys] [${new Date().toISOString()}] Fin de llamada sendMessage. ID asignado: ${messageId}`);
@@ -164,7 +179,7 @@ app.post('/send', async (req, res) => {
                         console.error('[Baileys] Error al cerrar socket en block finally:', err.stack || err);
                     }
                 }
-                console.log(`[Mutex] [${new Date().toISOString()}] Bloqueo liberado para ${cleanPhone}`);
+                console.log(`[Mutex] [${new Date().toISOString()}] Bloqueo liberado para ${phone}`);
             }
         });
 
