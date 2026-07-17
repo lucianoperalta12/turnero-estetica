@@ -230,9 +230,15 @@ app.get('/qr', async (req, res) => {
                         }
 
                         if (connection === 'open') {
-                            console.log('[QR] ¡Vinculación exitosa! Cerrando conexión inmediatamente.');
+                            console.log('[QR] ¡Vinculación exitosa! Esperando 15 segundos para descargar historial y persistir credenciales...');
                             connectionStatus = 'desconectado';
                             currentQR = null;
+                            
+                            // IMPORTANTE: Al vincular por primera vez, no podemos cerrar el socket inmediatamente.
+                            // Debemos esperar 15 segundos para dar tiempo a Baileys de recibir el bootstrap de la sesión
+                            // y escribir correctamente las prekeys, llaves de cifrado y credenciales iniciales al disco.
+                            await new Promise(r => setTimeout(r, 15000));
+                            
                             sock.ev.off('connection.update', updateHandler);
                             resolve();
                         }
