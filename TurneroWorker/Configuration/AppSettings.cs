@@ -35,5 +35,5 @@ public class WhatsAppConfig
 public class ScheduleConfig
 {
     public string TimeZone { get; set; } = "America/Argentina/Buenos_Aires";
-    public List<string> ExecutionTimes { get; set; } = new() { "09:00", "18:00" };
+    public List<string> ExecutionTimes { get; set; } = new();
 }
