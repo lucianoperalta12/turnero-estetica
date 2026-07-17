@@ -142,18 +142,61 @@ app.post('/send', async (req, res) => {
                 }
                 console.log(`[Baileys] [${new Date().toISOString()}] Número validado con éxito.`);
 
-                // Enviar mensaje
-                console.log(`[Baileys] [${new Date().toISOString()}] Inicio de llamada sendMessage a ${cleanPhone}...`);
-                const sendResponse = await sock.sendMessage(jid, { text: message });
-                const messageId = sendResponse?.key?.id;
-                console.log(`[Baileys] [${new Date().toISOString()}] Fin de llamada sendMessage. ID asignado: ${messageId}`);
+                // Controlar confirmación de servidor (ACK >= 2) mitigando race conditions
+                let messageId = null;
+                let ackReceived = false;
+                let resolveAckPromise;
 
-                // En Baileys, una vez que sendMessage resuelve, el mensaje ya fue escrito en el socket.
-                // Sin embargo, para evitar el error de "Esperando el mensaje" en el celular receptor
-                // (causado porque el receptor pide las llaves de encriptación y el emisor se desconecta antes de responder),
-                // mantenemos el socket abierto por un periodo de gracia fijo de 5 segundos.
-                console.log(`[Baileys] [${new Date().toISOString()}] Esperando 5 segundos de gracia para asegurar envío de llaves y sincronización...`);
-                await new Promise(r => setTimeout(r, 5000));
+                const ackPromise = new Promise((resolve) => {
+                    resolveAckPromise = resolve;
+                });
+
+                const updateListener = (updates) => {
+                    for (const update of updates) {
+                        if (messageId && update.key.id === messageId) {
+                            const status = update.update.status;
+                            console.log(`[Baileys] [${new Date().toISOString()}] Recepción de evento de confirmación. ID: ${messageId}, Status: ${status}`);
+                            
+                            // Status >= 2 significa que el servidor de WhatsApp procesó el mensaje (SERVER_ACK)
+                            if (status >= 2) {
+                                ackReceived = true;
+                                resolveAckPromise();
+                            }
+                        }
+                    }
+                };
+
+                // Registrar el listener ANTES de disparar el envío
+                sock.ev.on('messages.update', updateListener);
+
+                try {
+                    console.log(`[Baileys] [${new Date().toISOString()}] Inicio de llamada sendMessage a ${cleanPhone}...`);
+                    const sendResponse = await sock.sendMessage(jid, { text: message });
+                    messageId = sendResponse?.key?.id;
+                    console.log(`[Baileys] [${new Date().toISOString()}] Fin de llamada sendMessage. ID asignado: ${messageId}`);
+
+                    if (!ackReceived) {
+                        console.log(`[Baileys] [${new Date().toISOString()}] Esperando confirmación de entrega (ACK >= 2) del servidor...`);
+                        
+                        const ackTimeout = setTimeout(() => {
+                            console.warn(`[Baileys] [${new Date().toISOString()}] ADVERTENCIA: Timeout de seguridad (15s) esperando ACK para ID: ${messageId}.`);
+                            resolveAckPromise(); // Continuar aunque haya timeout de ACK por seguridad
+                        }, 15000); // 15 segundos máximo de espera por el ACK
+
+                        await ackPromise;
+                        clearTimeout(ackTimeout);
+                    } else {
+                        console.log(`[Baileys] [${new Date().toISOString()}] El ACK ya se había recibido antes de esperar.`);
+                    }
+
+                } finally {
+                    sock.ev.off('messages.update', updateListener);
+                }
+
+                // Esperar un tiempo aleatorio entre 2 y 6 segundos antes de desconectar
+                const randomDelay = Math.floor(Math.random() * (6000 - 2000 + 1)) + 2000;
+                console.log(`[Baileys] [${new Date().toISOString()}] Esperando delay aleatorio de ${randomDelay}ms antes de cerrar el socket...`);
+                await new Promise(r => setTimeout(r, randomDelay));
 
                 return { ok: true, messageId };
 
