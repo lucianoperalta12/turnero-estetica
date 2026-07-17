@@ -10,25 +10,29 @@ namespace TurneroWorker;
 public class Worker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ScheduleConfig _scheduleConfig;
-    private readonly TimeZoneInfo _tz;
+    private readonly IOptionsMonitor<AppSettings> _options;
     private readonly ILogger<Worker> _logger;
+    private readonly object _scheduleChangedLock = new();
+    private TaskCompletionSource _scheduleChanged = CreateScheduleChangedSignal();
 
     public Worker(
         IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> options,
+        IOptionsMonitor<AppSettings> options,
         ILogger<Worker> logger)
     {
         _scopeFactory = scopeFactory;
-        _scheduleConfig = options.Value.Schedule;
+        _options = options;
         _logger = logger;
-        _tz = GetTimeZoneInfo(_scheduleConfig.TimeZone);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("TurneroWorker iniciado. Zona horaria: {TZ}", _tz.Id);
-        _logger.LogInformation("Horarios de ejecución: {Times}", string.Join(", ", _scheduleConfig.ExecutionTimes));
+        var scheduleConfig = _options.CurrentValue.Schedule;
+        var tz = GetTimeZoneInfo(scheduleConfig.TimeZone);
+        using var changeRegistration = _options.OnChange(_ => SignalScheduleChanged());
+
+        _logger.LogInformation("TurneroWorker iniciado. Zona horaria: {TZ}", tz.Id);
+        _logger.LogInformation("Horarios de ejecucion: {Times}", string.Join(", ", scheduleConfig.ExecutionTimes));
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -36,7 +40,17 @@ public class Worker : BackgroundService
 
             try
             {
-                await Task.Delay(delay, stoppingToken);
+                var delayTask = Task.Delay(delay, stoppingToken);
+                var scheduleChangedTask = WaitForScheduleChangeAsync();
+                var completedTask = await Task.WhenAny(delayTask, scheduleChangedTask);
+
+                if (completedTask == scheduleChangedTask)
+                {
+                    ResetScheduleChangedSignal();
+                    continue;
+                }
+
+                await delayTask;
             }
             catch (OperationCanceledException)
             {
@@ -45,7 +59,6 @@ public class Worker : BackgroundService
 
             if (stoppingToken.IsCancellationRequested) break;
 
-            // Crear scope por ciclo para servicios Scoped
             await using var scope = _scopeFactory.CreateAsyncScope();
             var reminderService = scope.ServiceProvider.GetRequiredService<ReminderService>();
             await reminderService.EjecutarAsync(stoppingToken);
@@ -55,18 +68,19 @@ public class Worker : BackgroundService
     }
 
     /// <summary>
-    /// Calcula cuánto tiempo falta hasta el próximo horario configurado (zona: <see cref="_tz"/>).
+    /// Calcula cuanto tiempo falta hasta el proximo horario configurado.
     /// Los ExecutionTimes duplicados se ignoran. El delay se calcula en UTC para que
     /// Task.Delay sea correcto independientemente de la zona del sistema operativo.
     /// </summary>
     private (DateTime proxLocal, TimeSpan delay) CalcularProximaEjecucion()
     {
+        var scheduleConfig = _options.CurrentValue.Schedule;
+        var tz = GetTimeZoneInfo(scheduleConfig.TimeZone);
         var ahoraSystem = DateTimeOffset.Now;
-        var ahoraUtc    = ahoraSystem.UtcDateTime;
-        var ahoraLocal  = TimeZoneInfo.ConvertTimeFromUtc(ahoraUtc, _tz);
+        var ahoraUtc = ahoraSystem.UtcDateTime;
+        var ahoraLocal = TimeZoneInfo.ConvertTimeFromUtc(ahoraUtc, tz);
 
-        // Deduplicar, parsear y ordenar los horarios configurados
-        var horasValidas = _scheduleConfig.ExecutionTimes
+        var horasValidas = scheduleConfig.ExecutionTimes
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(s => TimeOnly.TryParse(s, out var t) ? (TimeOnly?)t : null)
             .Where(t => t.HasValue)
@@ -80,7 +94,6 @@ public class Worker : BackgroundService
             return (ahoraLocal.AddHours(1), TimeSpan.FromHours(1));
         }
 
-        // Primer horario futuro de hoy; si todos pasaron, el primero de mañana
         DateTime? proxLocal = null;
         foreach (var hora in horasValidas)
         {
@@ -93,15 +106,14 @@ public class Worker : BackgroundService
         }
         proxLocal ??= ahoraLocal.Date.AddDays(1).Add(horasValidas[0].ToTimeSpan());
 
-        // Delay basado en UTC para que Task.Delay sea exacto
-        var proxUtc = TimeZoneInfo.ConvertTimeToUtc(proxLocal.Value, _tz);
-        var delay   = proxUtc - ahoraUtc;
+        var proxUtc = TimeZoneInfo.ConvertTimeToUtc(proxLocal.Value, tz);
+        var delay = proxUtc - ahoraUtc;
         if (delay <= TimeSpan.Zero) delay = TimeSpan.FromSeconds(1);
 
         _logger.LogInformation(
-            "[Scheduler] Hora sistema: {Sistema} | Hora {TZ}: {Local} | Próxima ejecución: {Proximo} (en {Delay:hh\\:mm\\:ss})",
+            "[Scheduler] Hora sistema: {Sistema} | Hora {TZ}: {Local} | Proxima ejecucion: {Proximo} (en {Delay:hh\\:mm\\:ss})",
             ahoraSystem.ToString("yyyy-MM-dd HH:mm:ss zzz"),
-            _tz.Id,
+            tz.Id,
             ahoraLocal.ToString("yyyy-MM-dd HH:mm:ss"),
             proxLocal.Value.ToString("yyyy-MM-dd HH:mm"),
             delay);
@@ -125,5 +137,37 @@ public class Worker : BackgroundService
             };
             return TimeZoneInfo.FindSystemTimeZoneById(windowsId);
         }
+    }
+
+    private Task WaitForScheduleChangeAsync()
+    {
+        lock (_scheduleChangedLock)
+        {
+            return _scheduleChanged.Task;
+        }
+    }
+
+    private void SignalScheduleChanged()
+    {
+        lock (_scheduleChangedLock)
+        {
+            _scheduleChanged.TrySetResult();
+        }
+    }
+
+    private void ResetScheduleChangedSignal()
+    {
+        lock (_scheduleChangedLock)
+        {
+            if (_scheduleChanged.Task.IsCompleted)
+            {
+                _scheduleChanged = CreateScheduleChangedSignal();
+            }
+        }
+    }
+
+    private static TaskCompletionSource CreateScheduleChangedSignal()
+    {
+        return new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 }
