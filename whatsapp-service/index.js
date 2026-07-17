@@ -17,10 +17,10 @@ const AUTH_DIR = join(__dirname, 'auth_session');
 const QR_PATH  = join(__dirname, 'qr.png');
 const PORT     = process.env.PORT || 3000;
 
-// Configuración de Logger silenciosa de Baileys para no saturar consola
+// Configuración de Logger silenciosa de Baileys
 const logger = pino({ level: 'silent' });
 
-// Mutex simple para exclusión mutua sin librerías externas
+// Mutex para exclusión mutua
 class Mutex {
     constructor() {
         this.queue = Promise.resolve();
@@ -69,7 +69,7 @@ app.post('/send', async (req, res) => {
 
     try {
         const sendResult = await lock.runExclusive(async () => {
-            console.log(`[Mutex] Bloqueo adquirido para procesar envío a ${cleanPhone}`);
+            console.log(`[Mutex] [${new Date().toISOString()}] Bloqueo adquirido para procesar envío a ${cleanPhone}`);
 
             if (!fs.existsSync(join(AUTH_DIR, 'creds.json'))) {
                 console.warn('[WhatsApp] No existen credenciales guardadas (creds.json). Requiere vinculación.');
@@ -106,14 +106,14 @@ app.post('/send', async (req, res) => {
                         const { connection, lastDisconnect } = update;
 
                         if (connection === 'open') {
-                            console.log(`[Baileys] Conexión abierta con éxito.`);
+                            console.log(`[Baileys] [${new Date().toISOString()}] Conexión abierta con éxito (connection=open).`);
                             isConnected = true;
                             sock.ev.off('connection.update', updateHandler);
                             resolve();
                         } else if (connection === 'close') {
                             const error = lastDisconnect?.error;
                             const statusCode = (error instanceof Boom) ? error.output.statusCode : null;
-                            console.log(`[Baileys] Conexión cerrada. Status: ${statusCode}`);
+                            console.log(`[Baileys] [${new Date().toISOString()}] Conexión cerrada. Status: ${statusCode}`);
 
                             sock.ev.off('connection.update', updateHandler);
 
@@ -134,32 +134,67 @@ app.post('/send', async (req, res) => {
                 });
 
                 // Validar número
-                console.log(`[Baileys] Validando existencia de número en WhatsApp: ${jid}`);
+                console.log(`[Baileys] [${new Date().toISOString()}] Validando existencia de número en WhatsApp (onWhatsApp): ${jid}`);
                 const [onWaResult] = await sock.onWhatsApp(jid);
                 if (!onWaResult || !onWaResult.exists) {
                     console.warn(`[Baileys] El número ${cleanPhone} no está registrado en WhatsApp.`);
                     throw new Error(`El número ${cleanPhone} no existe en WhatsApp.`);
                 }
-                console.log(`[Baileys] Número validado con éxito.`);
+                console.log(`[Baileys] [${new Date().toISOString()}] Número validado con éxito.`);
 
-                // Enviar mensaje
-                console.log(`[Baileys] Enviando mensaje a ${cleanPhone}...`);
+                // Enviar mensaje e inicio de espera de confirmación
+                console.log(`[Baileys] [${new Date().toISOString()}] Inicio de sendMessage a ${cleanPhone}...`);
                 const sendResponse = await sock.sendMessage(jid, { text: message });
-                const messageId = sendResponse?.key?.id ?? 'n/a';
-                console.log(`[Baileys] Mensaje enviado. ID: ${messageId}`);
+                const messageId = sendResponse?.key?.id;
+                console.log(`[Baileys] [${new Date().toISOString()}] Fin de llamada sendMessage. ID asignado: ${messageId}`);
+
+                console.log(`[Baileys] [${new Date().toISOString()}] Esperando confirmación de entrega (ACK >= 2) del servidor para ID: ${messageId}...`);
+
+                // Esperamos la confirmación del servidor (ACK status >= 2)
+                await new Promise((resolve, reject) => {
+                    const ackTimeout = setTimeout(() => {
+                        sock.ev.off('messages.update', updateListener);
+                        reject(new Error('TIMEOUT_WAITING_ACK'));
+                    }, 12000); // 12 segundos máximo de espera por ACK del servidor
+
+                    const updateListener = (updates) => {
+                        for (const update of updates) {
+                            if (update.key.id === messageId) {
+                                const status = update.update.status;
+                                console.log(`[Baileys] [${new Date().toISOString()}] Recepción de evento de confirmación. ID: ${messageId}, Status: ${status}`);
+                                
+                                // Status 2 es SERVER_ACK (mensaje recibido en el servidor de WhatsApp)
+                                if (status >= 2) {
+                                    clearTimeout(ackTimeout);
+                                    sock.ev.off('messages.update', updateListener);
+                                    resolve();
+                                }
+                            }
+                        }
+                    };
+
+                    sock.ev.on('messages.update', updateListener);
+                });
+
+                console.log(`[Baileys] [${new Date().toISOString()}] Servidor de WhatsApp confirmó entrega (ACK recibido).`);
+
+                // Darle 2 segundos de gracia al sistema para que escriba las actualizaciones
+                // de cifrado (keys/prekeys) en el disco antes de matar el socket.
+                console.log(`[Baileys] [${new Date().toISOString()}] Esperando 2 segundos adicionales para el guardado de llaves cifradas...`);
+                await new Promise(r => setTimeout(r, 2000));
 
                 return { ok: true, messageId };
 
             } finally {
                 if (sock) {
-                    console.log(`[Baileys] Cerrando socket inmediatamente...`);
+                    console.log(`[Baileys] [${new Date().toISOString()}] Ejecución de sock.end().`);
                     try {
                         sock.end();
                     } catch (err) {
-                        console.error('[Baileys] Error al cerrar socket:', err.stack || err);
+                        console.error('[Baileys] Error al cerrar socket en block finally:', err.stack || err);
                     }
                 }
-                console.log(`[Mutex] Bloqueo liberado para ${cleanPhone}`);
+                console.log(`[Mutex] [${new Date().toISOString()}] Bloqueo liberado para ${cleanPhone}`);
             }
         });
 
@@ -170,6 +205,9 @@ app.post('/send', async (req, res) => {
         if (err.message === 'REQUERIDA_VINCULACION') {
             connectionStatus = 'desconectado';
             return res.status(503).json({ ok: false, error: 'Requerida vinculación de dispositivo. Acceda a /qr.' });
+        }
+        if (err.message === 'TIMEOUT_WAITING_ACK') {
+            return res.status(504).json({ ok: false, error: 'Tiempo de espera de confirmación de servidor agotado.' });
         }
         return res.status(500).json({ ok: false, error: err.message, stack: err.stack });
     }
