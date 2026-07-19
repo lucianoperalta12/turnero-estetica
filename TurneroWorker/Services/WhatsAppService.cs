@@ -112,34 +112,36 @@ public class WhatsAppService
         return WhatsAppSendResult.Fallo(statusCode, body);
     }
 
-
     private static string BuildMensaje(TurnoInfo turno)
     {
+        var nombre = turno.Nombre
+    .Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+
         var variante = Random.Shared.Next(5);
         return variante switch
         {
-            0 => $"Hola {turno.Nombre} 👋\n\n" +
+            0 => $"Hola {nombre} 👋\n\n" +
                  $"Te recordamos que hoy tenés turno en la Estética a las {turno.Hora}.\n\n" +
                  "Si necesitás reprogramarlo, escribinos por este medio.\n\n" +
                  "¡Te esperamos! 💖",
 
-            1 => $"¡Hola, {turno.Nombre}! 😊\n\n" +
+            1 => $"¡Hola, {nombre}! 😊\n\n" +
                  $"Hoy te esperamos en la Estética. Tu turno está programado para las {turno.Hora}.\n\n" +
                  "Si querés modificar el horario, respondé este mensaje.\n\n" +
                  "¡Nos vemos pronto! ✨",
 
-            2 => $"Buen día, {turno.Nombre} 🌸\n\n" +
+            2 => $"Buen día, {nombre} 🌸\n\n" +
                  $"Queríamos confirmarte tu turno de hoy a las {turno.Hora}.\n\n" +
                  "Si no podés asistir o necesitás cambiarlo, avisanos con este mensaje.\n\n" +
                  "¡Que tengas un lindo día! 💅",
 
-            3 => $"Hola {turno.Nombre}.\n\n" +
+            3 => $"Hola {nombre}.\n\n" +
                  $"Este es un recordatorio de tu turno de hoy en la Estética, previsto para las {turno.Hora}.\n\n" +
                  "Ante cualquier inconveniente, escribinos para ayudarte con el cambio.\n\n" +
                  "¡Te esperamos!",
 
             _ => $"¡Hola! 👋\n\n" +
-                 $"{turno.Nombre}, te esperamos hoy a las {turno.Hora} para tu turno.\n\n" +
+                 $"{nombre}, te esperamos hoy a las {turno.Hora} para tu turno.\n\n" +
                  "Si necesitás reprogramarlo, respondé este WhatsApp.\n\n" +
                  "¡Nos vemos!"
         };
