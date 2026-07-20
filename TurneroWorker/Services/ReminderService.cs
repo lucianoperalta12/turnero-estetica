@@ -89,7 +89,7 @@ public class ReminderService
                 turno.Nombre, turno.Fecha, turno.Hora);
 
             // 3. Resolver teléfono desde el directorio (case-insensitive)
-            var clave = turno.Nombre.Trim().ToLowerInvariant();
+            var clave = NombrePacienteHelper.NormalizarClave(turno.Nombre);
             _logger.LogInformation(
                 "Resolviendo paciente: EventId='{EventId}', NombreOriginal='{Nombre}', NombreLength={NombreLength}, ClaveBuscada='{Clave}', ClaveLength={ClaveLength}, ClaveChars='{ClaveChars}'",
                 turno.EventId,

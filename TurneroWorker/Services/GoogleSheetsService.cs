@@ -96,7 +96,7 @@ public class GoogleSheetsService
                 continue;
             }
 
-            var clave = nombre.ToLowerInvariant();
+            var clave = NombrePacienteHelper.NormalizarClave(nombre);
             _logger.LogInformation("Fila Sheet #{Row}: ClaveDirectorio='{Clave}', ClaveLength={ClaveLength}, ClaveChars='{ClaveChars}'", rowNumber, clave, clave.Length, DebugChars(clave));
 
             if (directorio.ContainsKey(clave))

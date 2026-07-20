@@ -117,9 +117,9 @@ public class GoogleCalendarService
             }
 
             // El título del evento es el nombre del paciente (sin teléfono)
-            var nombre = ev.Summary?.Trim() ?? string.Empty;
+            var nombre = NombrePacienteHelper.ObtenerNombrePaciente(ev.Summary);
             _logger.LogInformation(
-                "Titulo interpretado como paciente: Raw='{RawSummary}' -> Trim='{Nombre}', TrimLength={NombreLength}, TrimChars='{NombreChars}'",
+                "Titulo interpretado como paciente: Raw='{RawSummary}' -> NombrePaciente='{Nombre}', NombreLength={NombreLength}, NombreChars='{NombreChars}'",
                 ev.Summary ?? "<null>",
                 nombre,
                 nombre.Length,
