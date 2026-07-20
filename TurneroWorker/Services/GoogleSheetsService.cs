@@ -64,12 +64,31 @@ public class GoogleSheetsService
             return directorio;
         }
 
+        _logger.LogInformation("Google Sheet leido: Range='{Range}', Filas={Filas}", _config.Range, filas.Count);
+
+        var rowNumber = 0;
         foreach (var fila in filas)
         {
-            if (fila.Count < 2) continue;
+            rowNumber++;
+            _logger.LogInformation("Fila Sheet #{Row}: Columnas={Columnas}, Valores='{Valores}'", rowNumber, fila.Count, string.Join(" | ", fila.Select(v => v?.ToString() ?? "<null>")));
+
+            if (fila.Count < 2)
+            {
+                _logger.LogWarning("Fila Sheet #{Row} omitida: tiene menos de 2 columnas.", rowNumber);
+                continue;
+            }
 
             var nombre = fila[0]?.ToString()?.Trim() ?? string.Empty;
             var telefono = fila[1]?.ToString()?.Trim() ?? string.Empty;
+            _logger.LogInformation(
+                "Fila Sheet #{Row}: NombreRaw='{NombreRaw}', NombreTrim='{Nombre}', NombreLength={NombreLength}, NombreChars='{NombreChars}', TelefonoRaw='{TelefonoRaw}', TelefonoTrim='{Telefono}'",
+                rowNumber,
+                fila[0]?.ToString() ?? "<null>",
+                nombre,
+                nombre.Length,
+                DebugChars(nombre),
+                fila[1]?.ToString() ?? "<null>",
+                telefono);
 
             if (string.IsNullOrEmpty(nombre) || string.IsNullOrEmpty(telefono))
             {
@@ -78,6 +97,8 @@ public class GoogleSheetsService
             }
 
             var clave = nombre.ToLowerInvariant();
+            _logger.LogInformation("Fila Sheet #{Row}: ClaveDirectorio='{Clave}', ClaveLength={ClaveLength}, ClaveChars='{ClaveChars}'", rowNumber, clave, clave.Length, DebugChars(clave));
+
             if (directorio.ContainsKey(clave))
             {
                 _logger.LogWarning("Nombre duplicado en el Sheet: '{Nombre}'. Se usa el primero encontrado.", nombre);
@@ -179,5 +200,12 @@ public class GoogleSheetsService
         }
 
         return null;
+    }
+
+    private static string DebugChars(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+
+        return string.Join(" ", value.Select(c => $"{c}=U+{(int)c:X4}"));
     }
 }

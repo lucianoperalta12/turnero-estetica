@@ -63,6 +63,8 @@ public class GoogleCalendarService
         _logger.LogInformation("Consultando Calendar para el día de HOY: {Fecha} (UTC {Min} → {Max})",
             hoy.ToString("yyyy-MM-dd"), timeMin, timeMax);
 
+        _logger.LogInformation("CalendarId configurado: {CalendarId}", _config.CalendarId);
+
         var request = service.Events.List(_config.CalendarId);
         request.TimeMinDateTimeOffset = timeMin;
         request.TimeMaxDateTimeOffset = timeMax;
@@ -81,23 +83,48 @@ public class GoogleCalendarService
         }
 
         var turnos = new List<TurnoInfo>();
+        var eventos = events.Items ?? Enumerable.Empty<Event>();
 
-        foreach (var ev in events.Items ?? Enumerable.Empty<Event>())
+        _logger.LogInformation("Eventos crudos recibidos desde Calendar: {Count}", eventos.Count());
+
+        foreach (var ev in eventos)
         {
+            _logger.LogInformation(
+                "Evento crudo Calendar: Id='{EventId}', Status='{Status}', Summary='{Summary}', SummaryLength={SummaryLength}, SummaryChars='{SummaryChars}', StartDate='{StartDate}', StartDateTime='{StartDateTime}', DescriptionLength={DescriptionLength}",
+                ev.Id,
+                ev.Status,
+                ev.Summary ?? "<null>",
+                ev.Summary?.Length ?? 0,
+                DebugChars(ev.Summary),
+                ev.Start?.Date ?? "<null>",
+                ev.Start?.DateTimeDateTimeOffset?.ToString("O") ?? "<null>",
+                ev.Description?.Length ?? 0);
+
             // Ignorar cancelados
-            if (ev.Status == "cancelled") continue;
+            if (ev.Status == "cancelled")
+            {
+                _logger.LogInformation("Evento '{EventId}' omitido porque esta cancelado.", ev.Id);
+                continue;
+            }
 
             var descripcion = ev.Description ?? string.Empty;
 
             // Ignorar ya marcados
             if (descripcion.Contains(RecordatorioMarca, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogInformation("Evento '{Summary}' ya tiene marca. Omitiendo.", ev.Summary);
+                _logger.LogInformation("Evento '{Summary}' ({EventId}) ya tiene marca. Omitiendo.", ev.Summary, ev.Id);
                 continue;
             }
 
             // El título del evento es el nombre del paciente (sin teléfono)
             var nombre = ev.Summary?.Trim() ?? string.Empty;
+            _logger.LogInformation(
+                "Titulo interpretado como paciente: Raw='{RawSummary}' -> Trim='{Nombre}', TrimLength={NombreLength}, TrimChars='{NombreChars}'",
+                ev.Summary ?? "<null>",
+                nombre,
+                nombre.Length,
+                DebugChars(nombre));
+
             if (string.IsNullOrEmpty(nombre))
             {
                 _logger.LogWarning("Evento sin título. Omitiendo.");
@@ -105,6 +132,12 @@ public class GoogleCalendarService
             }
 
             // Determinar fecha/hora local del evento
+            if (ev.Start == null)
+            {
+                _logger.LogWarning("Evento {EventId} sin fecha/hora de inicio. Omitiendo.", ev.Id);
+                continue;
+            }
+
             DateTimeOffset inicio;
             if (ev.Start.DateTimeDateTimeOffset.HasValue)
                 inicio = TimeZoneInfo.ConvertTime(ev.Start.DateTimeDateTimeOffset.Value, _tz);
@@ -123,6 +156,13 @@ public class GoogleCalendarService
                 Fecha = DateOnly.FromDateTime(inicio.DateTime),
                 Hora = inicio.ToString("HH:mm")
             });
+
+            _logger.LogInformation(
+                "Turno agregado desde Calendar: EventId='{EventId}', Nombre='{Nombre}', Fecha={Fecha}, Hora={Hora}",
+                ev.Id,
+                nombre,
+                DateOnly.FromDateTime(inicio.DateTime),
+                inicio.ToString("HH:mm"));
         }
 
         _logger.LogInformation("Turnos encontrados para hoy ({Fecha}): {Count}", hoy.ToString("yyyy-MM-dd"), turnos.Count);
@@ -191,5 +231,12 @@ public class GoogleCalendarService
             };
             return TimeZoneInfo.FindSystemTimeZoneById(windowsId);
         }
+    }
+
+    private static string DebugChars(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+
+        return string.Join(" ", value.Select(c => $"{c}=U+{(int)c:X4}"));
     }
 }

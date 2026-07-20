@@ -42,6 +42,11 @@ public class ReminderService
         try
         {
             directorio = await _sheetsService.GetDirectorioAsync();
+            _logger.LogInformation("Directorio listo para buscar: Count={Count}", directorio.Count);
+            foreach (var kvp in directorio)
+            {
+                _logger.LogInformation("Directorio key='{Key}', KeyLength={KeyLength}, KeyChars='{KeyChars}', Telefono='{Telefono}'", kvp.Key, kvp.Key.Length, DebugChars(kvp.Key), kvp.Value);
+            }
         }
         catch (Exception ex)
         {
@@ -54,6 +59,11 @@ public class ReminderService
         try
         {
             turnos = await _calendarService.GetTurnosDeHoyAsync();
+            _logger.LogInformation("Turnos listos para procesar: Count={Count}", turnos.Count);
+            foreach (var turno in turnos)
+            {
+                _logger.LogInformation("Turno pendiente: EventId='{EventId}', Nombre='{Nombre}', NombreLength={NombreLength}, NombreChars='{NombreChars}', Fecha={Fecha}, Hora={Hora}", turno.EventId, turno.Nombre, turno.Nombre.Length, DebugChars(turno.Nombre), turno.Fecha, turno.Hora);
+            }
         }
         catch (Exception ex)
         {
@@ -80,11 +90,26 @@ public class ReminderService
 
             // 3. Resolver teléfono desde el directorio (case-insensitive)
             var clave = turno.Nombre.Trim().ToLowerInvariant();
+            _logger.LogInformation(
+                "Resolviendo paciente: EventId='{EventId}', NombreOriginal='{Nombre}', NombreLength={NombreLength}, ClaveBuscada='{Clave}', ClaveLength={ClaveLength}, ClaveChars='{ClaveChars}'",
+                turno.EventId,
+                turno.Nombre,
+                turno.Nombre.Length,
+                clave,
+                clave.Length,
+                DebugChars(clave));
+
             if (!directorio.TryGetValue(clave, out var telefono))
             {
                 var nombresDisponibles = string.Join(", ", directorio.Keys);
+                var candidatosContiene = directorio.Keys
+                    .Where(k => k.Contains(clave, StringComparison.OrdinalIgnoreCase) || clave.Contains(k, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
                 _logger.LogWarning("Paciente '{Nombre}' (buscando clave: '{Clave}') NO encontrado en el directorio de Google Sheets.", turno.Nombre, clave);
+                _logger.LogWarning("Clave buscada detalle: Length={ClaveLength}, Chars='{ClaveChars}'", clave.Length, DebugChars(clave));
                 _logger.LogWarning("Claves disponibles en el Sheet: [{NombresDisponibles}]", nombresDisponibles);
+                _logger.LogWarning("Candidatos por contiene/esta contenido: Count={Count}, Valores=[{Candidatos}]", candidatosContiene.Count, string.Join(", ", candidatosContiene));
                 noEncontrados++;
 
                 // Notificar al administrador si está configurado
@@ -97,12 +122,15 @@ public class ReminderService
             }
 
             turno.Telefono = telefono;
+            _logger.LogInformation("Paciente encontrado: Nombre='{Nombre}', Clave='{Clave}', Telefono='{Telefono}'", turno.Nombre, clave, telefono);
 
             // 4. Enviar recordatorio por WhatsApp
             WhatsAppSendResult resultado;
             try
             {
+                _logger.LogInformation("Intentando enviar WhatsApp: EventId='{EventId}', Nombre='{Nombre}', Telefono='{Telefono}', Hora='{Hora}'", turno.EventId, turno.Nombre, turno.Telefono, turno.Hora);
                 resultado = await _whatsAppService.EnviarRecordatorioAsync(turno);
+                _logger.LogInformation("Resultado WhatsApp: EventId='{EventId}', Exitoso={Exitoso}, StatusCode={StatusCode}, MessageId='{MessageId}', RawResponse='{RawResponse}'", turno.EventId, resultado.Exitoso, resultado.StatusCode, resultado.MessageId ?? "<null>", resultado.RawResponse);
             }
             catch (Exception ex)
             {
@@ -169,5 +197,12 @@ public class ReminderService
         {
             _logger.LogError(ex, "No se pudo enviar la alerta al administrador ({AdminPhone})", _adminPhone);
         }
+    }
+
+    private static string DebugChars(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+
+        return string.Join(" ", value.Select(c => $"{c}=U+{(int)c:X4}"));
     }
 }

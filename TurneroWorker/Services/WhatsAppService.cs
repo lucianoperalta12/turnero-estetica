@@ -40,7 +40,7 @@ public class WhatsAppService
         };
 
         var json = JsonSerializer.Serialize(payload);
-        _logger.LogDebug("Enviando payload a {Url}: {Json}", url, json);
+        _logger.LogInformation("WhatsAppService EnviarRecordatorio: Url='{Url}', Nombre='{Nombre}', Telefono='{Telefono}', MensajeLength={MensajeLength}, Payload='{Json}'", url, turno.Nombre, turno.Telefono, mensaje.Length, json);
 
         using var client = _httpClientFactory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -59,6 +59,7 @@ public class WhatsAppService
 
         var body = await response.Content.ReadAsStringAsync();
         var statusCode = (int)response.StatusCode;
+        _logger.LogInformation("WhatsAppService respuesta recordatorio: StatusCode={StatusCode}, IsSuccess={IsSuccess}, Body='{Body}'", statusCode, response.IsSuccessStatusCode, body);
 
         if (response.IsSuccessStatusCode)
         {
@@ -83,6 +84,7 @@ public class WhatsAppService
         var payload = new { phone, message = mensaje };
 
         var json = JsonSerializer.Serialize(payload);
+        _logger.LogInformation("WhatsAppService EnviarMensajeDirecto: Url='{Url}', Phone='{Phone}', MensajeLength={MensajeLength}, Payload='{Json}'", url, phone, mensaje.Length, json);
 
         using var client = _httpClientFactory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -101,6 +103,7 @@ public class WhatsAppService
 
         var body = await response.Content.ReadAsStringAsync();
         var statusCode = (int)response.StatusCode;
+        _logger.LogInformation("WhatsAppService respuesta directa: StatusCode={StatusCode}, IsSuccess={IsSuccess}, Body='{Body}'", statusCode, response.IsSuccessStatusCode, body);
 
         if (response.IsSuccessStatusCode)
         {
