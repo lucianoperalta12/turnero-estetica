@@ -848,7 +848,10 @@
             } else {
                 const now = new Date();
                 now.setMinutes(0, 0, 0);
-                document.getElementById('turno-inicio').value = now.toISOString().substring(0, 16);
+                // Formatear como local sin convertir a UTC
+                const pad = n => String(n).padStart(2, '0');
+                const localStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                document.getElementById('turno-inicio').value = localStr;
             }
 
             document.getElementById('turno-titulo').value = 'Turno Estética';
@@ -866,21 +869,29 @@
             document.getElementById('turno-cliente-id').value = props.clienteId;
 
             document.getElementById('turno-titulo').value = props.tituloOriginal || 'Turno Estética';
-            document.getElementById('turno-inicio').value = eventObj.start.toISOString().substring(0, 16);
+            // Usar la fecha local del evento sin convertir a UTC
+            const evStart = eventObj.start;
+            const pad = n => String(n).padStart(2, '0');
+            const localStr = `${evStart.getFullYear()}-${pad(evStart.getMonth()+1)}-${pad(evStart.getDate())}T${pad(evStart.getHours())}:${pad(evStart.getMinutes())}`;
+            document.getElementById('turno-inicio').value = localStr;
 
             document.getElementById('turno-modal').classList.add('active');
         }
 
         async function saveTurno() {
             const id = document.getElementById('turno-id').value;
-            const startDate = new Date(document.getElementById('turno-inicio').value);
+            // Tomar la string del input directamente ("2026-07-27T10:00") sin convertir a UTC
+            const startStr = document.getElementById('turno-inicio').value; // "YYYY-MM-DDTHH:mm"
+            const startDate = new Date(startStr);
             const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+            const pad = n => String(n).padStart(2, '0');
+            const endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth()+1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
 
             const payload = {
                 clienteId: parseInt(document.getElementById('turno-cliente-id').value),
                 titulo: document.getElementById('turno-titulo').value || 'Turno Estética',
-                fechaInicio: startDate.toISOString(),
-                fechaFin: endDate.toISOString(),
+                fechaInicio: startStr + ':00', // "YYYY-MM-DDTHH:mm:ss" sin zona → el server lo toma como local
+                fechaFin: endStr,
                 estado: 'confirmado',
                 notas: ''
             };

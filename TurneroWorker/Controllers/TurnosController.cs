@@ -58,6 +58,10 @@ public class TurnosController : ControllerBase
             turno.FechaFin = turno.FechaInicio.AddHours(1);
         }
 
+        // Asegurar que las fechas se traten como hora local (sin conversión UTC)
+        turno.FechaInicio = DateTime.SpecifyKind(turno.FechaInicio, DateTimeKind.Unspecified);
+        turno.FechaFin = DateTime.SpecifyKind(turno.FechaFin, DateTimeKind.Unspecified);
+
         var id = await _dbService.CrearTurnoAsync(turno);
         turno.Id = id;
         return Ok(turno);
@@ -67,6 +71,8 @@ public class TurnosController : ControllerBase
     public async Task<IActionResult> UpdateTurno(int id, [FromBody] Turno turno)
     {
         turno.Id = id;
+        turno.FechaInicio = DateTime.SpecifyKind(turno.FechaInicio, DateTimeKind.Unspecified);
+        turno.FechaFin = DateTime.SpecifyKind(turno.FechaFin, DateTimeKind.Unspecified);
         await _dbService.UpdateTurnoAsync(turno);
         return NoContent();
     }
