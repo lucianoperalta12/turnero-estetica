@@ -7,202 +7,114 @@ namespace TurneroWorker.Services;
 
 public class ReminderService
 {
-    private const string RecordatorioMarca = "[RecordatorioEnviado]";
-
-    private readonly GoogleCalendarService _calendarService;
-    private readonly GoogleSheetsService _sheetsService;
+    private readonly DatabaseService _dbService;
     private readonly WhatsAppService _whatsAppService;
     private readonly string _adminPhone;
     private readonly ILogger<ReminderService> _logger;
 
     public ReminderService(
-        GoogleCalendarService calendarService,
-        GoogleSheetsService sheetsService,
+        DatabaseService dbService,
         WhatsAppService whatsAppService,
         IOptions<AppSettings> options,
         ILogger<ReminderService> logger)
     {
-        _calendarService = calendarService;
-        _sheetsService = sheetsService;
+        _dbService = dbService;
         _whatsAppService = whatsAppService;
         _adminPhone = options.Value.WhatsApp.AdminPhone;
         _logger = logger;
     }
 
     /// <summary>
-    /// Orquesta el ciclo completo: carga directorio → lee turnos → resuelve teléfonos → envía WhatsApp → marca enviados.
-    /// Si un paciente no se encuentra en el directorio, notifica al administrador.
+    /// Orquesta el ciclo de recordatorios leyendo los turnos desde la base de datos PostgreSQL,
+    /// enviando el WhatsApp mediante WhatsAppService y marcando el turno como enviado.
     /// </summary>
     public async Task EjecutarAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("=== Iniciando ciclo de recordatorios ===");
+        _logger.LogInformation("=== Iniciando ciclo de recordatorios desde PostgreSQL ===");
 
-        // 1. Cargar el directorio de contactos desde Google Sheets (una sola vez por ciclo)
-        Dictionary<string, string> directorio;
+        // Buscar turnos para la fecha actual (o del día de hoy)
+        var hoy = DateTime.Today;
+        IEnumerable<Turno> turnosPendientes;
+
         try
         {
-            directorio = await _sheetsService.GetDirectorioAsync();
-            _logger.LogInformation("Directorio listo para buscar: Count={Count}", directorio.Count);
-            foreach (var kvp in directorio)
-            {
-                _logger.LogInformation("Directorio key='{Key}', KeyLength={KeyLength}, KeyChars='{KeyChars}', Telefono='{Telefono}'", kvp.Key, kvp.Key.Length, DebugChars(kvp.Key), kvp.Value);
-            }
+            turnosPendientes = await _dbService.GetTurnosPendientesRecordatorioAsync(hoy);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error crítico al cargar el directorio de Google Sheets. Ciclo abortado.");
+            _logger.LogError(ex, "Error crítico al consultar turnos pendientes en PostgreSQL. Ciclo abortado.");
             return;
         }
 
-        // 2. Obtener los turnos de hoy desde Google Calendar
-        List<TurnoInfo> turnos;
-        try
-        {
-            turnos = await _calendarService.GetTurnosDeHoyAsync();
-            _logger.LogInformation("Turnos listos para procesar: Count={Count}", turnos.Count);
-            foreach (var turno in turnos)
-            {
-                _logger.LogInformation("Turno pendiente: EventId='{EventId}', Nombre='{Nombre}', NombreLength={NombreLength}, NombreChars='{NombreChars}', Fecha={Fecha}, Hora={Hora}", turno.EventId, turno.Nombre, turno.Nombre.Length, DebugChars(turno.Nombre), turno.Fecha, turno.Hora);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error crítico al obtener turnos. Ciclo abortado.");
-            return;
-        }
+        var listaTurnos = turnosPendientes.ToList();
+        _logger.LogInformation("Turnos pendientes de recordatorio encontrados en PostgreSQL: Count={Count}", listaTurnos.Count);
 
-        if (turnos.Count == 0)
+        if (listaTurnos.Count == 0)
         {
-            _logger.LogInformation("Sin turnos para hoy. Ciclo finalizado.");
+            _logger.LogInformation("Sin turnos pendientes para enviar hoy. Ciclo finalizado.");
             return;
         }
 
         int enviados = 0;
-        int noEncontrados = 0;
         int errores = 0;
 
-        foreach (var turno in turnos)
+        foreach (var turno in listaTurnos)
         {
             if (cancellationToken.IsCancellationRequested) break;
 
-            _logger.LogInformation("Procesando turno: {Nombre} | {Fecha} {Hora}",
-                turno.Nombre, turno.Fecha, turno.Hora);
-
-            // 3. Resolver teléfono desde el directorio (case-insensitive)
-            var clave = NombrePacienteHelper.NormalizarClave(turno.Nombre);
-            _logger.LogInformation(
-                "Resolviendo paciente: EventId='{EventId}', NombreOriginal='{Nombre}', NombreLength={NombreLength}, ClaveBuscada='{Clave}', ClaveLength={ClaveLength}, ClaveChars='{ClaveChars}'",
-                turno.EventId,
-                turno.Nombre,
-                turno.Nombre.Length,
-                clave,
-                clave.Length,
-                DebugChars(clave));
-
-            if (!directorio.TryGetValue(clave, out var telefono))
+            if (turno.Cliente == null || string.IsNullOrWhiteSpace(turno.Cliente.Telefono))
             {
-                var nombresDisponibles = string.Join(", ", directorio.Keys);
-                var candidatosContiene = directorio.Keys
-                    .Where(k => k.Contains(clave, StringComparison.OrdinalIgnoreCase) || clave.Contains(k, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
-                _logger.LogWarning("Paciente '{Nombre}' (buscando clave: '{Clave}') NO encontrado en el directorio de Google Sheets.", turno.Nombre, clave);
-                _logger.LogWarning("Clave buscada detalle: Length={ClaveLength}, Chars='{ClaveChars}'", clave.Length, DebugChars(clave));
-                _logger.LogWarning("Claves disponibles en el Sheet: [{NombresDisponibles}]", nombresDisponibles);
-                _logger.LogWarning("Candidatos por contiene/esta contenido: Count={Count}, Valores=[{Candidatos}]", candidatosContiene.Count, string.Join(", ", candidatosContiene));
-                noEncontrados++;
-
-                // Notificar al administrador si está configurado
-                if (!string.IsNullOrEmpty(_adminPhone))
-                {
-                    await EnviarAlertaAdminAsync(turno, cancellationToken);
-                }
-
+                _logger.LogWarning("Turno Id={TurnoId} para {Titulo} no posee cliente o teléfono válido.", turno.Id, turno.Titulo);
                 continue;
             }
 
-            turno.Telefono = telefono;
-            _logger.LogInformation("Paciente encontrado: Nombre='{Nombre}', Clave='{Clave}', Telefono='{Telefono}'", turno.Nombre, clave, telefono);
+            var turnoInfo = new TurnoInfo
+            {
+                EventId = turno.Id.ToString(),
+                Nombre = turno.Cliente.Nombre,
+                Telefono = turno.Cliente.Telefono,
+                Fecha = DateOnly.FromDateTime(turno.FechaInicio),
+                Hora = turno.FechaInicio.ToString("HH:mm")
+            };
 
-            // 4. Enviar recordatorio por WhatsApp
+            _logger.LogInformation("Procesando turno DB Id={Id}: {Cliente} | {Fecha} {Hora}",
+                turno.Id, turnoInfo.Nombre, turnoInfo.Fecha, turnoInfo.Hora);
+
             WhatsAppSendResult resultado;
             try
             {
-                _logger.LogInformation("Intentando enviar WhatsApp: EventId='{EventId}', Nombre='{Nombre}', Telefono='{Telefono}', Hora='{Hora}'", turno.EventId, turno.Nombre, turno.Telefono, turno.Hora);
-                resultado = await _whatsAppService.EnviarRecordatorioAsync(turno);
-                _logger.LogInformation("Resultado WhatsApp: EventId='{EventId}', Exitoso={Exitoso}, StatusCode={StatusCode}, MessageId='{MessageId}', RawResponse='{RawResponse}'", turno.EventId, resultado.Exitoso, resultado.StatusCode, resultado.MessageId ?? "<null>", resultado.RawResponse);
+                resultado = await _whatsAppService.EnviarRecordatorioAsync(turnoInfo);
+                _logger.LogInformation("Resultado WhatsApp Turno Id={Id}: Exitoso={Exitoso}, StatusCode={StatusCode}",
+                    turno.Id, resultado.Exitoso, resultado.StatusCode);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Excepción inesperada al enviar WhatsApp para evento {EventId}", turno.EventId);
+                _logger.LogError(ex, "Excepción al enviar WhatsApp para el turno Id={Id}", turno.Id);
                 errores++;
                 continue;
             }
 
             if (resultado.Exitoso)
             {
-                // 5. Marcar el evento como enviado en Calendar
                 try
                 {
-                    var descActual = await _calendarService.ObtenerDescripcionEventoAsync(turno.EventId) ?? string.Empty;
-                    if (!descActual.Contains(RecordatorioMarca, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var nuevaDesc = descActual.TrimEnd() + "\n" + RecordatorioMarca;
-                        await _calendarService.ActualizarDescripcionEventoAsync(turno.EventId, nuevaDesc);
-                    }
+                    await _dbService.MarcarRecordatorioEnviadoAsync(turno.Id);
+                    enviados++;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Envío OK pero no se pudo marcar evento {EventId}", turno.EventId);
+                    _logger.LogError(ex, "Envío de WhatsApp exitoso pero falló al actualizar recordatorio_enviado en la BD para turno Id={Id}", turno.Id);
                 }
-                enviados++;
             }
             else
             {
                 errores++;
             }
 
-            // Pequeña pausa entre envíos para no saturar la API
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
 
-        _logger.LogInformation(
-            "=== Ciclo finalizado: {Enviados} enviados, {NoEncontrados} no encontrados en directorio, {Errores} errores, {Total} total ===",
-            enviados, noEncontrados, errores, turnos.Count);
-    }
-
-    private async Task EnviarAlertaAdminAsync(TurnoInfo turno, CancellationToken cancellationToken)
-    {
-        var mensaje =
-            $"⚠️ Alerta Turnero\n\n" +
-            $"No se pudo enviar el recordatorio para *{turno.Nombre}* ({turno.Hora} hs) " +
-            $"porque no fue encontrado en el directorio de Google Sheets.\n\n" +
-            $"Por favor verificá que el nombre esté cargado correctamente en la planilla.";
-
-        var turnoAdmin = new TurnoInfo
-        {
-            EventId = turno.EventId,
-            Nombre = "Administrador",
-            Telefono = _adminPhone,
-            Fecha = turno.Fecha,
-            Hora = turno.Hora
-        };
-
-        try
-        {
-            // Enviamos la alerta directamente al admin usando el servicio de WhatsApp con el mensaje personalizado
-            await _whatsAppService.EnviarMensajeDirectoAsync(_adminPhone, mensaje);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "No se pudo enviar la alerta al administrador ({AdminPhone})", _adminPhone);
-        }
-    }
-
-    private static string DebugChars(string? value)
-    {
-        if (string.IsNullOrEmpty(value)) return string.Empty;
-
-        return string.Join(" ", value.Select(c => $"{c}=U+{(int)c:X4}"));
+        _logger.LogInformation("=== Ciclo finalizado: {Enviados} enviados, {Errores} errores, {Total} total ===",
+            enviados, errores, listaTurnos.Count);
     }
 }

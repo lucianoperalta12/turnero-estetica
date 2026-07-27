@@ -5,9 +5,7 @@ using TurneroWorker;
 using TurneroWorker.Configuration;
 using TurneroWorker.Services;
 
-bool forceRun = args.Contains("--force");
-
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 // ── Configuración ────────────────────────────────────────────────────────────
 builder.Services.Configure<AppSettings>(
@@ -16,9 +14,11 @@ builder.Services.Configure<AppSettings>(
 // ── HttpClient ───────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient();
 
-// ── Servicios (Scoped: se crea un scope por ciclo de ejecución en Worker) ────
-builder.Services.AddScoped<GoogleCalendarService>();
-builder.Services.AddScoped<GoogleSheetsService>();
+// ── Servicios Web & Base de Datos ────────────────────────────────────────────
+builder.Services.AddRazorPages();
+builder.Services.AddControllers();
+
+builder.Services.AddSingleton<DatabaseService>();
 builder.Services.AddScoped<WhatsAppService>();
 builder.Services.AddScoped<ReminderService>();
 
@@ -27,23 +27,35 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 
-if (forceRun)
-{
-    // Modo one-shot: ejecutar ahora y salir
-    var app = builder.Build();
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("=== Modo --force: ejecutando recordatorios ahora ===");
-
-    await using var scope = app.Services.CreateAsyncScope();
-    var reminder = scope.ServiceProvider.GetRequiredService<ReminderService>();
-    await reminder.EjecutarAsync();
-
-    logger.LogInformation("=== Ejecución forzada completada. Saliendo. ===");
-    return;
-}
-
-// ── Worker (Singleton: usa IServiceScopeFactory para resolver Scoped) ────────
+// ── Worker (Hosted Service en segundo plano) ─────────────────────────────────
 builder.Services.AddHostedService<Worker>();
 
-var host = builder.Build();
-host.Run();
+var app = builder.Build();
+
+// Inicializar tablas en PostgreSQL al arrancar la app
+using (var scope = app.Services.CreateScope())
+{
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var dbService = scope.ServiceProvider.GetRequiredService<DatabaseService>();
+    try
+    {
+        logger.LogInformation("Verificando / Inicializando esquema 'turnero' en PostgreSQL...");
+        await dbService.InicializarTablasAsync();
+        logger.LogInformation("Base de datos inicializada correctamente.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "No se pudo auto-inicializar la BD (verificar conexión PostgreSQL).");
+    }
+}
+
+app.UseStaticFiles();
+app.UseRouting();
+
+app.MapRazorPages();
+app.MapControllers();
+
+// Redireccionar raíz '/' a '/turnos'
+app.MapGet("/", () => Results.Redirect("/turnos"));
+
+app.Run();

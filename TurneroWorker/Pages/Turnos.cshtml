@@ -1,0 +1,931 @@
+@page "/turnos"
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Estética Turnos</title>
+    <!-- Google Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- FullCalendar CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --primary: #db2777;
+            --primary-hover: #be185d;
+            --primary-light: #fdf2f8;
+            --primary-border: #fbcfe8;
+            --bg-body: #fff5f7;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --danger: #ef4444;
+            --shadow-sm: 0 1px 3px 0 rgb(219 39 119 / 0.08);
+            --shadow-md: 0 4px 12px -2px rgb(219 39 119 / 0.15);
+            --shadow-lg: 0 10px 25px -5px rgb(219 39 119 / 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            height: 100vh;
+            height: -webkit-fill-available;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* iOS Clean Top Bar */
+        .navbar {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--primary-border);
+            padding: 0.5rem 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            box-shadow: var(--shadow-sm);
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .navbar-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: var(--primary);
+        }
+
+        .brand i {
+            font-size: 1.2rem;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Segmented Control iOS Style */
+        .segmented-control {
+            display: flex;
+            width: 100%;
+            background: var(--primary-light);
+            padding: 0.2rem;
+            border-radius: 0.6rem;
+            border: 1px solid var(--primary-border);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 0.45rem;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.85rem;
+            border-radius: 0.45rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-header {
+            padding: 0.4rem 0.85rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #f1f5f9;
+            color: var(--text-main);
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        .qr-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.35rem 0.65rem;
+            background-color: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        /* Floating Action Button (FAB) for iOS */
+        .fab-button {
+            position: fixed;
+            bottom: 1.25rem;
+            right: 1.25rem;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            box-shadow: var(--shadow-lg);
+            border: none;
+            cursor: pointer;
+            z-index: 90;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+
+        .fab-button:active {
+            transform: scale(0.92);
+            background-color: var(--primary-hover);
+        }
+
+        /* Main Container */
+        .container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* TAB CONTROLS - EXPLICIT DISPLAY RULES */
+        .tab-content {
+            width: 100%;
+            height: 100%;
+            display: none !important;
+            padding: 0.5rem;
+            box-sizing: border-box;
+        }
+
+        .tab-content.active {
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
+        /* Calendar Container & Full Vertical Scroll */
+        #calendar-tab {
+            overflow: hidden !important;
+        }
+
+        #calendar-container {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            border: 1px solid var(--primary-border);
+            box-shadow: var(--shadow-sm);
+            flex: 1;
+            min-height: 0;
+            overflow: visible;
+        }
+
+        #calendar {
+            /* height set by JS */
+        }
+
+        /* FullCalendar Custom Compact iOS Toolbar */
+        .fc-header-toolbar {
+            margin-bottom: 0.4rem !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0.4rem !important;
+        }
+
+        .fc-toolbar-chunk {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            width: 100% !important;
+        }
+
+        .fc-toolbar-title {
+            font-size: 0.95rem !important;
+            font-weight: 700 !important;
+            color: var(--primary) !important;
+        }
+
+        .fc-button-group {
+            display: flex !important;
+            gap: 0.2rem !important;
+        }
+
+        .fc-button-primary {
+            background-color: var(--primary-light) !important;
+            border-color: var(--primary-border) !important;
+            color: var(--primary) !important;
+            border-radius: 0.45rem !important;
+            font-size: 0.75rem !important;
+            font-weight: 600 !important;
+            padding: 0.35rem 0.65rem !important;
+            text-transform: capitalize !important;
+            box-shadow: none !important;
+        }
+
+        .fc-button-primary.fc-button-active, .fc-button-primary:hover {
+            background-color: var(--primary) !important;
+            border-color: var(--primary) !important;
+            color: white !important;
+        }
+
+        /* High Contrast Black Text on Calendar Cards */
+        .fc-event, .fc-event-main, .fc-event-title, .fc-event-time {
+            background-color: #fce7f3 !important;
+            border: 1.5px solid var(--primary-border) !important;
+            color: #0f172a !important;
+            border-radius: 0.4rem;
+            padding: 2px 4px;
+            font-size: 0.8rem !important;
+            font-weight: 700 !important;
+            cursor: pointer;
+        }
+
+        .fc-timegrid-slot {
+            height: 2.6em !important;
+        }
+
+        /* Clientes Table Layout & Scrolling */
+        #clients-tab {
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+
+        .clients-header {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.5rem 0.85rem 0.5rem 2.2rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--primary-border);
+            font-size: 0.85rem;
+            outline: none;
+            background: white;
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--primary);
+            font-size: 0.85rem;
+        }
+
+        .clients-table-card {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            border: 1px solid var(--primary-border);
+            box-shadow: var(--shadow-sm);
+            overflow-x: auto;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            max-height: calc(100vh - 160px);
+            flex: 1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background-color: var(--primary-light);
+            padding: 0.65rem 0.85rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--primary);
+            border-bottom: 1px solid var(--primary-border);
+            z-index: 2;
+        }
+
+        td {
+            padding: 0.75rem 0.85rem;
+            border-bottom: 1px solid #fce7f3;
+            font-size: 0.85rem;
+            color: var(--text-main);
+        }
+
+        /* iOS Bottom Sheet Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(3px);
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--card-bg);
+            border-top-left-radius: 1.25rem;
+            border-top-right-radius: 1.25rem;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--primary-border);
+            overflow: hidden;
+            animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @@keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .modal-header {
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid var(--primary-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--primary-light);
+        }
+
+        .modal-header h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            font-size: 1.3rem;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .form-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .form-group input, .form-group select {
+            padding: 0.6rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--primary-border);
+            font-size: 0.9rem;
+            outline: none;
+            background: white;
+        }
+
+        .modal-footer {
+            padding: 0.85rem 1rem;
+            border-top: 1px solid var(--primary-border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            background: var(--primary-light);
+        }
+
+        /* Desktop Adjustments */
+        @@media (min-width: 641px) {
+            .navbar {
+                flex-direction: row;
+                padding: 0.75rem 1.5rem;
+            }
+
+            .segmented-control {
+                width: auto;
+            }
+
+            .fab-button {
+                display: none;
+            }
+
+            .fc-header-toolbar {
+                flex-direction: row !important;
+            }
+
+            .fc-toolbar-chunk {
+                width: auto !important;
+            }
+
+            .modal-overlay {
+                align-items: center;
+            }
+
+            .modal {
+                border-radius: 1rem;
+            }
+
+            .clients-table-card {
+                max-height: calc(100vh - 180px);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <div class="navbar-top">
+            <div class="brand">
+                <i class="fa-solid fa-spa"></i>
+                <span>Estética Turnos</span>
+            </div>
+
+            <div class="nav-actions">
+                <a href="http://200.58.102.134:3000/qr" target="_blank" class="qr-badge">
+                    <i class="fa-brands fa-whatsapp"></i> QR Sync
+                </a>
+                <button class="btn-header btn-primary" onclick="openNewTurnoModal()">
+                    <i class="fa-solid fa-plus"></i> Nueva Cita
+                </button>
+            </div>
+        </div>
+
+        <nav class="segmented-control">
+            <button class="tab-btn active" onclick="switchTab('calendar-tab', this)">
+                <i class="fa-regular fa-calendar-days"></i> Turnos
+            </button>
+            <button class="tab-btn" onclick="switchTab('clients-tab', this)">
+                <i class="fa-solid fa-users"></i> Clientes
+            </button>
+        </nav>
+    </header>
+
+    <!-- Floating Action Button (FAB) on Mobile -->
+    <button class="fab-button" onclick="openNewTurnoModal()" title="Nueva Cita">
+        <i class="fa-solid fa-plus"></i>
+    </button>
+
+    <!-- Main Body Container -->
+    <main class="container">
+        
+        <!-- Tab 1: Calendar View -->
+        <section id="calendar-tab" class="tab-content active">
+            <div id="calendar-container">
+                <div id="calendar"></div>
+            </div>
+        </section>
+
+        <!-- Tab 2: Clients Table View -->
+        <section id="clients-tab" class="tab-content">
+            <div class="clients-header">
+                <div class="search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="client-search" placeholder="Buscar clienta..." onkeyup="filterClients()">
+                </div>
+                <button class="btn-header btn-primary" onclick="openNewClientModal()">
+                    <i class="fa-solid fa-user-plus"></i> Nueva Cliente
+                </button>
+            </div>
+
+            <div class="clients-table-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre Completo</th>
+                            <th>Teléfono</th>
+                            <th style="width: 80px; text-align: right;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clients-table-body">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Nueva Cita -->
+    <div id="turno-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="turno-modal-title">Nueva Cita</h3>
+                <button class="close-btn" onclick="closeModal('turno-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="turno-id">
+                
+                <div class="form-group">
+                    <label>Seleccionar Clienta</label>
+                    <input type="text" id="turno-cliente-search" placeholder="🔍 Filtrar clienta por nombre..." onkeyup="filterClientaDropdown()" style="margin-bottom: 0.35rem;">
+                    <select id="turno-cliente-id" size="4" style="height: 110px;" required>
+                        <option value="">Cargando clientas...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Título / Tratamiento</label>
+                    <input type="text" id="turno-titulo" value="Turno Estética" required>
+                </div>
+                <div class="form-group">
+                    <label>Fecha y Hora</label>
+                    <input type="datetime-local" id="turno-inicio" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-header btn-secondary" onclick="closeModal('turno-modal')">Cancelar</button>
+                <button id="btn-delete-turno" class="btn-header btn-danger" style="display:none;" onclick="deleteTurno()">Eliminar</button>
+                <button class="btn-header btn-primary" onclick="saveTurno()">Guardar Cita</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nueva Cliente -->
+    <div id="cliente-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="cliente-modal-title">Nueva Cliente</h3>
+                <button class="close-btn" onclick="closeModal('cliente-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="cliente-id">
+                <div class="form-group">
+                    <label>Nombre Completo</label>
+                    <input type="text" id="cliente-nombre" placeholder="Ej: María García" required>
+                </div>
+                <div class="form-group">
+                    <label>Teléfono (WhatsApp)</label>
+                    <input type="text" id="cliente-telefono" placeholder="Ej: 3456562288" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-header btn-secondary" onclick="closeModal('cliente-modal')">Cancelar</button>
+                <button class="btn-header btn-primary" onclick="saveCliente()">Guardar Cliente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FullCalendar & Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script>
+        let calendar;
+        let clientesCache = [];
+
+        document.addEventListener('DOMContentLoaded', function () {
+            initCalendar();
+            loadClientes();
+        });
+
+        function initCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            const isMobile = window.innerWidth <= 641;
+
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: isMobile ? 'timeGridDay' : 'timeGridWeek',
+                hiddenDays: [0],
+                locale: 'es',
+                height: 'auto',
+                scrollTime: '10:00:00',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                buttonText: {
+                    today: 'Hoy',
+                    month: 'Mes',
+                    week: 'Semana',
+                    day: 'Día'
+                },
+                slotMinTime: '10:00:00',
+                slotMaxTime: '22:00:00',
+                allDaySlot: false,
+                selectable: true,
+                events: '/api/turnos',
+                select: function (info) {
+                    openNewTurnoModal(info.startStr);
+                },
+                eventClick: function (info) {
+                    openEditTurnoModal(info.event);
+                }
+            });
+            calendar.render();
+        }
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            if (btnElement) btnElement.classList.add('active');
+            
+            const target = document.getElementById(tabId);
+            if (target) target.classList.add('active');
+
+            if (tabId === 'calendar-tab' && calendar) {
+                setTimeout(() => {
+                    // Recalcular el alto real ahora que el tab es visible
+                    const navbarH = document.querySelector('.navbar').offsetHeight;
+                    const tabsH = document.querySelector('.tab-controls').offsetHeight;
+                    const calendarHeight = window.innerHeight - navbarH - tabsH - 24;
+                    calendar.setOption('height', calendarHeight);
+                    calendar.updateSize();
+                }, 80);
+            }
+        }
+
+        // --- CLIENTES LOGIC ---
+        async function loadClientes() {
+            try {
+                const res = await fetch('/api/clientes');
+                clientesCache = await res.json();
+                renderClientsTable(clientesCache);
+                populateClientesDropdown(clientesCache);
+            } catch (err) {
+                console.error('Error cargando clientes:', err);
+            }
+        }
+
+        function renderClientsTable(clientes) {
+            const tbody = document.getElementById('clients-table-body');
+            tbody.innerHTML = '';
+
+            if (clientes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No hay clientes registradas.</td></tr>`;
+                return;
+            }
+
+            const ordenadas = [...clientes].sort((a, b) => 
+                (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' })
+            );
+
+            ordenadas.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${escapeHtml(c.nombre)}</strong></td>
+                    <td><a href="https://wa.me/${c.telefono}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fa-brands fa-whatsapp"></i> ${escapeHtml(c.telefono)}</a></td>
+                    <td style="text-align: right;">
+                        <button class="btn-header btn-secondary" style="padding:0.25rem 0.45rem; font-size:0.75rem;" onclick="editCliente(${c.id})"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn-header btn-danger" style="padding:0.25rem 0.45rem; font-size:0.75rem;" onclick="deleteCliente(${c.id})"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterClients() {
+            const query = document.getElementById('client-search').value.toLowerCase();
+            const filtered = clientesCache.filter(c => 
+                c.nombre.toLowerCase().includes(query) || c.telefono.includes(query)
+            );
+            renderClientsTable(filtered);
+        }
+
+        function populateClientesDropdown(clientesList) {
+            const select = document.getElementById('turno-cliente-id');
+            select.innerHTML = '';
+            
+            if (clientesList.length === 0) {
+                select.innerHTML = '<option value="">Sin resultados</option>';
+                return;
+            }
+
+            const ordenadas = [...clientesList].sort((a, b) => 
+                (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' })
+            );
+
+            ordenadas.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = `${c.nombre} (${c.telefono})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function filterClientaDropdown() {
+            const query = document.getElementById('turno-cliente-search').value.toLowerCase();
+            const filtered = clientesCache.filter(c =>
+                c.nombre.toLowerCase().includes(query) || c.telefono.includes(query)
+            );
+            populateClientesDropdown(filtered);
+        }
+
+        function openNewClientModal() {
+            document.getElementById('cliente-id').value = '';
+            document.getElementById('cliente-nombre').value = '';
+            document.getElementById('cliente-telefono').value = '';
+            document.getElementById('cliente-modal-title').textContent = 'Nueva Cliente';
+            document.getElementById('cliente-modal').classList.add('active');
+        }
+
+        function editCliente(id) {
+            const c = clientesCache.find(x => x.id === id);
+            if (!c) return;
+            document.getElementById('cliente-id').value = c.id;
+            document.getElementById('cliente-nombre').value = c.nombre;
+            document.getElementById('cliente-telefono').value = c.telefono;
+            document.getElementById('cliente-modal-title').textContent = 'Editar Cliente';
+            document.getElementById('cliente-modal').classList.add('active');
+        }
+
+        async function saveCliente() {
+            const id = document.getElementById('cliente-id').value;
+            const payload = {
+                nombre: document.getElementById('cliente-nombre').value,
+                telefono: document.getElementById('cliente-telefono').value
+            };
+
+            if (!payload.nombre || !payload.telefono) {
+                alert('Nombre y Teléfono son requeridos.');
+                return;
+            }
+
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/clientes/${id}` : '/api/clientes';
+
+            try {
+                await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                closeModal('cliente-modal');
+                await loadClientes();
+            } catch (err) {
+                alert('Error al guardar cliente.');
+            }
+        }
+
+        async function deleteCliente(id) {
+            if (!confirm('¿Eliminar esta cliente y todos sus turnos?')) return;
+            try {
+                await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
+                await loadClientes();
+            } catch (err) {
+                alert('Error al eliminar cliente.');
+            }
+        }
+
+        // --- TURNOS LOGIC ---
+        function openNewTurnoModal(startStr) {
+            document.getElementById('turno-id').value = '';
+            document.getElementById('turno-modal-title').textContent = 'Nueva Cita';
+            document.getElementById('btn-delete-turno').style.display = 'none';
+
+            document.getElementById('turno-cliente-search').value = '';
+            populateClientesDropdown(clientesCache);
+
+            if (startStr) {
+                document.getElementById('turno-inicio').value = startStr.substring(0, 16);
+            } else {
+                const now = new Date();
+                now.setMinutes(0, 0, 0);
+                document.getElementById('turno-inicio').value = now.toISOString().substring(0, 16);
+            }
+
+            document.getElementById('turno-titulo').value = 'Turno Estética';
+            document.getElementById('turno-modal').classList.add('active');
+        }
+
+        function openEditTurnoModal(eventObj) {
+            const props = eventObj.extendedProps;
+            document.getElementById('turno-id').value = eventObj.id;
+            document.getElementById('turno-modal-title').textContent = 'Editar Cita';
+            document.getElementById('btn-delete-turno').style.display = 'inline-block';
+
+            document.getElementById('turno-cliente-search').value = '';
+            populateClientesDropdown(clientesCache);
+            document.getElementById('turno-cliente-id').value = props.clienteId;
+
+            document.getElementById('turno-titulo').value = props.tituloOriginal || 'Turno Estética';
+            document.getElementById('turno-inicio').value = eventObj.start.toISOString().substring(0, 16);
+
+            document.getElementById('turno-modal').classList.add('active');
+        }
+
+        async function saveTurno() {
+            const id = document.getElementById('turno-id').value;
+            const startDate = new Date(document.getElementById('turno-inicio').value);
+            const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+
+            const payload = {
+                clienteId: parseInt(document.getElementById('turno-cliente-id').value),
+                titulo: document.getElementById('turno-titulo').value || 'Turno Estética',
+                fechaInicio: startDate.toISOString(),
+                fechaFin: endDate.toISOString(),
+                estado: 'confirmado',
+                notas: ''
+            };
+
+            if (!payload.clienteId) {
+                alert('Debe seleccionar una clienta.');
+                return;
+            }
+
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/turnos/${id}` : '/api/turnos';
+
+            try {
+                await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                closeModal('turno-modal');
+                calendar.refetchEvents();
+            } catch (err) {
+                alert('Error al guardar la cita.');
+            }
+        }
+
+        async function deleteTurno() {
+            const id = document.getElementById('turno-id').value;
+            if (!id || !confirm('¿Eliminar esta cita?')) return;
+            try {
+                await fetch(`/api/turnos/${id}`, { method: 'DELETE' });
+                closeModal('turno-modal');
+                calendar.refetchEvents();
+            } catch (err) {
+                alert('Error al eliminar la cita.');
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
