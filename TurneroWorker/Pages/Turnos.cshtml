@@ -407,12 +407,12 @@
             background: var(--card-bg);
             border-radius: 1rem;
             width: 100%;
-            max-width: 440px;
+            max-width: 520px;
             box-shadow: var(--shadow-lg);
             border: 1px solid var(--primary-border);
             overflow: hidden;
             animation: popIn 0.2s ease-out;
-            max-height: 85vh;
+            max-height: 88vh;
             display: flex;
             flex-direction: column;
             margin: auto;
@@ -563,9 +563,18 @@
             padding: 0.85rem 1rem;
             border-top: 1px solid var(--primary-border);
             display: flex;
-            justify-content: flex-end;
-            gap: 0.5rem;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
             background: var(--primary-light);
+        }
+
+        .modal-footer .btn-modal-action {
+            flex: 1;
+            max-width: 160px;
+            justify-content: center;
+            padding: 0.55rem 1rem;
+            font-size: 0.88rem;
         }
 
         /* Desktop Adjustments */
@@ -719,9 +728,9 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-header btn-secondary" style="flex:1;" onclick="closeModal('turno-modal')">Cancelar</button>
-                <button id="btn-delete-turno" class="btn-header btn-danger" style="display:none;" onclick="deleteTurno()">Eliminar</button>
-                <button class="btn-header btn-primary" style="flex:2; font-size:0.9rem; padding:0.5rem 1rem;" onclick="saveTurno()">Guardar Cita</button>
+                <button class="btn-header btn-secondary btn-modal-action" onclick="closeModal('turno-modal')">Cancelar</button>
+                <button id="btn-delete-turno" class="btn-header btn-danger btn-modal-action" style="display:none;" onclick="deleteTurno()">Eliminar</button>
+                <button class="btn-header btn-primary btn-modal-action" onclick="saveTurno()">Guardar Cita</button>
             </div>
         </div>
     </div>
