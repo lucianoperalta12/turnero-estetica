@@ -870,7 +870,7 @@
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>${escapeHtml(c.nombre)}</strong></td>
-                    <td><a href="https://wa.me/${c.telefono}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fa-brands fa-whatsapp"></i> ${escapeHtml(c.telefono)}</a></td>
+                    <td><a href="https://wa.me/${c.telefono}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;">${escapeHtml(c.telefono)}</a></td>
                     <td style="text-align: right;">
                         <button class="btn-header btn-secondary" style="padding:0.25rem 0.45rem; font-size:0.75rem;" onclick="editCliente(${c.id})"><i class="fa-solid fa-pen"></i></button>
                         <button class="btn-header btn-danger" style="padding:0.25rem 0.45rem; font-size:0.75rem;" onclick="deleteCliente(${c.id})"><i class="fa-solid fa-trash"></i></button>
