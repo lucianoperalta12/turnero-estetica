@@ -32,9 +32,6 @@ builder.Services.AddHostedService<Worker>();
 
 var app = builder.Build();
 
-// Soporte para ejecutar la app bajo el prefijo /turnos (con o sin barra final)
-app.UsePathBase("/turnos");
-
 // Inicializar tablas en PostgreSQL al arrancar la app
 using (var scope = app.Services.CreateScope())
 {
