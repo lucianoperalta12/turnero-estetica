@@ -389,12 +389,14 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(3px);
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(4px);
             display: none;
-            align-items: flex-end;
+            align-items: center;
             justify-content: center;
             z-index: 100;
+            padding: 1rem;
+            box-sizing: border-box;
         }
 
         .modal-overlay.active {
@@ -404,20 +406,21 @@
         .modal {
             background: var(--card-bg);
             border-radius: 1rem;
-            width: 92%;
-            max-width: 480px;
+            width: 100%;
+            max-width: 440px;
             box-shadow: var(--shadow-lg);
             border: 1px solid var(--primary-border);
             overflow: hidden;
-            animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            max-height: 90vh;
+            animation: popIn 0.2s ease-out;
+            max-height: 85vh;
             display: flex;
             flex-direction: column;
+            margin: auto;
         }
 
-        @@keyframes slideUp {
-            from { transform: translateY(100%); }
-            to { transform: translateY(0); }
+        @@keyframes popIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
         }
 
         .modal-header {
@@ -444,32 +447,116 @@
         }
 
         .modal-body {
-            padding: 1rem;
+            padding: 0.85rem 1rem;
             display: flex;
             flex-direction: column;
-            gap: 0.85rem;
+            gap: 0.65rem;
             overflow-y: auto;
         }
 
         .form-group {
             display: flex;
             flex-direction: column;
-            gap: 0.3rem;
+            gap: 0.25rem;
+            position: relative;
+        }
+
+        .form-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
         .form-group label {
-            font-size: 0.8rem;
-            font-weight: 600;
+            font-size: 0.78rem;
+            font-weight: 700;
             color: var(--text-main);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .btn-inline-add {
+            background: transparent;
+            border: none;
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 0.78rem;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.2rem;
         }
 
         .form-group input, .form-group select {
-            padding: 0.6rem;
-            border-radius: 0.5rem;
+            padding: 0.45rem 0.65rem;
+            border-radius: 0.45rem;
             border: 1px solid var(--primary-border);
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             outline: none;
             background: white;
+            height: 38px;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(219, 39, 119, 0.15);
+        }
+
+        /* Destacado Fecha / Hora */
+        .datetime-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--primary-light);
+            border: 1px solid var(--primary-border);
+            padding: 0.45rem 0.75rem;
+            border-radius: 0.5rem;
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .datetime-badge i {
+            font-size: 1rem;
+        }
+
+        /* Autocomplete dropdown styling */
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid var(--primary-border);
+            border-radius: 0.5rem;
+            box-shadow: var(--shadow-md);
+            max-height: 160px;
+            overflow-y: auto;
+            z-index: 120;
+            display: none;
+        }
+
+        .autocomplete-dropdown.active {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover, .autocomplete-item.selected {
+            background-color: var(--primary-light);
+            color: var(--primary);
+            font-weight: 600;
         }
 
         .modal-footer {
@@ -601,28 +688,40 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="turno-id">
-                
+                <input type="hidden" id="turno-cliente-id">
+                <input type="hidden" id="turno-inicio">
+
+                <!-- Fecha y Hora Destacada -->
                 <div class="form-group">
-                    <label>Seleccionar Clienta</label>
-                    <input type="text" id="turno-cliente-search" placeholder="🔍 Buscar por nombre o teléfono..." oninput="filterClientaDropdown()" style="margin-bottom: 0.35rem;">
-                    <select id="turno-cliente-id" style="height: 42px; font-size: 0.95rem; font-weight: 500;" required>
-                        <option value="">Seleccione una clienta...</option>
-                    </select>
+                    <label>Fecha & Hora</label>
+                    <div class="datetime-badge">
+                        <i class="fa-regular fa-calendar-check"></i>
+                        <span id="turno-inicio-display">--</span>
+                    </div>
                 </div>
 
+                <!-- Buscador de Clienta con Autocompletado -->
                 <div class="form-group">
-                    <label>Título / Tratamiento</label>
-                    <input type="text" id="turno-titulo" value="Turno" required>
+                    <div class="form-group-header">
+                        <label>Clienta</label>
+                        <button class="btn-inline-add" type="button" onclick="openNewClientModal()">
+                            <i class="fa-solid fa-plus"></i> Nueva clienta
+                        </button>
+                    </div>
+                    <input type="text" id="turno-cliente-search" placeholder="Escribí nombre o teléfono..." autocomplete="off" oninput="onClientSearchInput()" onfocus="onClientSearchInput()">
+                    <div id="autocomplete-results" class="autocomplete-dropdown"></div>
                 </div>
+
+                <!-- Tratamiento / Servicio -->
                 <div class="form-group">
-                    <label>Fecha y Hora</label>
-                    <input type="datetime-local" id="turno-inicio" required>
+                    <label>Tratamiento / Servicio</label>
+                    <input type="text" id="turno-titulo" value="Turno Estética" required>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-header btn-secondary" onclick="closeModal('turno-modal')">Cancelar</button>
+                <button class="btn-header btn-secondary" style="flex:1;" onclick="closeModal('turno-modal')">Cancelar</button>
                 <button id="btn-delete-turno" class="btn-header btn-danger" style="display:none;" onclick="deleteTurno()">Eliminar</button>
-                <button class="btn-header btn-primary" onclick="saveTurno()">Guardar Cita</button>
+                <button class="btn-header btn-primary" style="flex:2; font-size:0.9rem; padding:0.5rem 1rem;" onclick="saveTurno()">Guardar Cita</button>
             </div>
         </div>
     </div>
@@ -863,46 +962,108 @@
             }
         }
 
+        // Autocompletado de Clientas
+        function onClientSearchInput() {
+            const query = document.getElementById('turno-cliente-search').value.trim().toLowerCase();
+            const container = document.getElementById('autocomplete-results');
+            container.innerHTML = '';
+
+            const filtered = clientesCache.filter(c =>
+                c.nombre.toLowerCase().includes(query) || (c.telefono && c.telefono.includes(query))
+            );
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="autocomplete-item" style="color:var(--text-muted);">Sin resultados. <a href="#" onclick="openNewClientModal(); return false;" style="color:var(--primary); font-weight:600;">+ Crear</a></div>`;
+                container.classList.add('active');
+                return;
+            }
+
+            filtered.slice(0, 6).forEach(c => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.innerHTML = `<strong>${escapeHtml(c.nombre)}</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(${escapeHtml(c.telefono)})</span>`;
+                item.onclick = () => selectClientAutocomplete(c);
+                container.appendChild(item);
+            });
+
+            container.classList.add('active');
+        }
+
+        function selectClientAutocomplete(clientObj) {
+            document.getElementById('turno-cliente-id').value = clientObj.id;
+            document.getElementById('turno-cliente-search').value = `${clientObj.nombre} (${clientObj.telefono})`;
+            document.getElementById('autocomplete-results').classList.remove('active');
+        }
+
+        // Cerrar autocompletado al hacer clic fuera
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#turno-cliente-search') && !e.target.closest('#autocomplete-results')) {
+                const container = document.getElementById('autocomplete-results');
+                if (container) container.classList.remove('active');
+            }
+        });
+
         // --- TURNOS LOGIC ---
+        function formatDateTimeDisplay(dateIsoOrObj) {
+            const date = new Date(dateIsoOrObj);
+            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+            const diaNom = dias[date.getDay()];
+            const diaNum = date.getDate();
+            const mesNom = meses[date.getMonth()];
+            const pad = n => String(n).padStart(2, '0');
+            const horaStr = `${pad(date.getHours())}:${pad(date.getMinutes())} hs`;
+            return `${diaNom} ${diaNum} de ${mesNom} - ${horaStr}`;
+        }
+
         function openNewTurnoModal(startStr) {
             document.getElementById('turno-id').value = '';
+            document.getElementById('turno-cliente-id').value = '';
             document.getElementById('turno-modal-title').textContent = 'Nueva Cita';
             document.getElementById('btn-delete-turno').style.display = 'none';
 
             document.getElementById('turno-cliente-search').value = '';
-            populateClientesDropdown(clientesCache);
+            document.getElementById('autocomplete-results').classList.remove('active');
 
-            if (startStr) {
-                document.getElementById('turno-inicio').value = startStr.substring(0, 16);
-            } else {
+            let rawStart = startStr;
+            if (!rawStart) {
                 const now = new Date();
                 now.setMinutes(0, 0, 0);
-                // Formatear como local sin convertir a UTC
                 const pad = n => String(n).padStart(2, '0');
-                const localStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                document.getElementById('turno-inicio').value = localStr;
+                rawStart = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
             }
 
-            document.getElementById('turno-titulo').value = 'Turno';
+            document.getElementById('turno-inicio').value = rawStart.substring(0, 16);
+            document.getElementById('turno-inicio-display').textContent = formatDateTimeDisplay(rawStart);
+
+            document.getElementById('turno-titulo').value = 'Turno Estética';
             document.getElementById('turno-modal').classList.add('active');
+
+            // Foco automático en el buscador de clienta
+            setTimeout(() => {
+                const input = document.getElementById('turno-cliente-search');
+                if (input) input.focus();
+            }, 100);
         }
 
         function openEditTurnoModal(eventObj) {
             const props = eventObj.extendedProps;
             document.getElementById('turno-id').value = eventObj.id;
+            document.getElementById('turno-cliente-id').value = props.clienteId;
             document.getElementById('turno-modal-title').textContent = 'Editar Cita';
             document.getElementById('btn-delete-turno').style.display = 'inline-block';
 
-            document.getElementById('turno-cliente-search').value = '';
-            populateClientesDropdown(clientesCache);
-            document.getElementById('turno-cliente-id').value = props.clienteId;
+            const client = clientesCache.find(c => c.id === props.clienteId);
+            document.getElementById('turno-cliente-search').value = client ? `${client.nombre} (${client.telefono})` : (props.clienteNombre || '');
+            document.getElementById('autocomplete-results').classList.remove('active');
 
-            document.getElementById('turno-titulo').value = props.tituloOriginal || 'Turno';
-            // Usar la fecha local del evento sin convertir a UTC
+            document.getElementById('turno-titulo').value = props.tituloOriginal || 'Turno Estética';
+
             const evStart = eventObj.start;
             const pad = n => String(n).padStart(2, '0');
             const localStr = `${evStart.getFullYear()}-${pad(evStart.getMonth()+1)}-${pad(evStart.getDate())}T${pad(evStart.getHours())}:${pad(evStart.getMinutes())}`;
             document.getElementById('turno-inicio').value = localStr;
+            document.getElementById('turno-inicio-display').textContent = formatDateTimeDisplay(evStart);
 
             document.getElementById('turno-modal').classList.add('active');
         }
