@@ -408,11 +408,12 @@
             border-radius: 1rem;
             width: 100%;
             max-width: 520px;
+            min-height: 420px;
+            max-height: 92vh;
             box-shadow: var(--shadow-lg);
             border: 1px solid var(--primary-border);
             overflow: hidden;
             animation: popIn 0.2s ease-out;
-            max-height: 88vh;
             display: flex;
             flex-direction: column;
             margin: auto;
@@ -447,11 +448,12 @@
         }
 
         .modal-body {
-            padding: 0.85rem 1rem;
+            padding: 1.2rem;
             display: flex;
             flex-direction: column;
-            gap: 0.65rem;
+            gap: 1rem;
             overflow-y: auto;
+            flex: 1;
         }
 
         .form-group {
