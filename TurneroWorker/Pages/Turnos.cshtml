@@ -403,14 +403,16 @@
 
         .modal {
             background: var(--card-bg);
-            border-top-left-radius: 1.25rem;
-            border-top-right-radius: 1.25rem;
-            width: 100%;
-            max-width: 500px;
+            border-radius: 1rem;
+            width: 92%;
+            max-width: 480px;
             box-shadow: var(--shadow-lg);
             border: 1px solid var(--primary-border);
             overflow: hidden;
             animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
         }
 
         @@keyframes slideUp {
@@ -446,6 +448,7 @@
             display: flex;
             flex-direction: column;
             gap: 0.85rem;
+            overflow-y: auto;
         }
 
         .form-group {
@@ -601,9 +604,9 @@
                 
                 <div class="form-group">
                     <label>Seleccionar Clienta</label>
-                    <input type="text" id="turno-cliente-search" placeholder="🔍 Filtrar clienta por nombre..." onkeyup="filterClientaDropdown()" style="margin-bottom: 0.35rem;">
-                    <select id="turno-cliente-id" size="4" style="height: 110px;" required>
-                        <option value="">Cargando clientas...</option>
+                    <input type="text" id="turno-cliente-search" placeholder="🔍 Buscar por nombre o teléfono..." oninput="filterClientaDropdown()" style="margin-bottom: 0.35rem;">
+                    <select id="turno-cliente-id" style="height: 42px; font-size: 0.95rem; font-weight: 500;" required>
+                        <option value="">Seleccione una clienta...</option>
                     </select>
                 </div>
 
@@ -687,6 +690,9 @@
                 allDaySlot: false,
                 selectable: true,
                 events: '/api/turnos',
+                selectable: true,
+                selectHelper: true,
+                unselectAuto: true,
                 eventDidMount: function(info) {
                     if (info.event.extendedProps && info.event.extendedProps.recordatorioEnviado) {
                         info.el.classList.add('turno-enviado');
@@ -695,6 +701,9 @@
                             titleEl.innerHTML = `<i class="fa-brands fa-whatsapp" style="color: #16a34a; margin-right: 3px;" title="Recordatorio WhatsApp Enviado"></i> ` + titleEl.innerHTML;
                         }
                     }
+                },
+                dateClick: function(info) {
+                    openNewTurnoModal(info.dateStr);
                 },
                 select: function (info) {
                     openNewTurnoModal(info.startStr);
@@ -771,10 +780,10 @@
 
         function populateClientesDropdown(clientesList) {
             const select = document.getElementById('turno-cliente-id');
-            select.innerHTML = '';
+            select.innerHTML = '<option value="">-- Seleccione una clienta --</option>';
             
             if (clientesList.length === 0) {
-                select.innerHTML = '<option value="">Sin resultados</option>';
+                select.innerHTML = '<option value="">No hay clientas registradas</option>';
                 return;
             }
 
