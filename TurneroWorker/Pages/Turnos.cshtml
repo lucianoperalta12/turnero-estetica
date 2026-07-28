@@ -43,7 +43,7 @@
             background-color: var(--bg-body);
             color: var(--text-main);
             height: 100vh;
-            height: -webkit-fill-available;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -197,6 +197,7 @@
             display: flex;
             overflow: hidden;
             position: relative;
+            min-height: 0;
         }
 
         /* TAB CONTROLS - EXPLICIT DISPLAY RULES */
@@ -215,7 +216,11 @@
 
         /* Calendar Container & Full Vertical Scroll */
         #calendar-tab {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             overflow: hidden !important;
+            min-height: 0;
         }
 
         #calendar-container {
@@ -225,12 +230,17 @@
             border: 1px solid var(--primary-border);
             box-shadow: var(--shadow-sm);
             flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
             min-height: 0;
-            overflow: visible;
         }
 
         #calendar {
-            /* height set by JS */
+            flex: 1;
+            width: 100%;
+            height: 100% !important;
+            min-height: 0;
         }
 
         /* FullCalendar Custom Compact iOS Toolbar */
@@ -594,7 +604,7 @@
 
                 <div class="form-group">
                     <label>Título / Tratamiento</label>
-                    <input type="text" id="turno-titulo" value="Turno Estética" required>
+                    <input type="text" id="turno-titulo" value="Turno" required>
                 </div>
                 <div class="form-group">
                     <label>Fecha y Hora</label>
@@ -653,7 +663,8 @@
                 initialView: isMobile ? 'timeGridDay' : 'timeGridWeek',
                 hiddenDays: [0],
                 locale: 'es',
-                height: 'auto',
+                height: '100%',
+                expandRows: true,
                 scrollTime: '10:00:00',
                 headerToolbar: {
                     left: 'prev,next today',
@@ -692,11 +703,6 @@
 
             if (tabId === 'calendar-tab' && calendar) {
                 setTimeout(() => {
-                    // Recalcular el alto real ahora que el tab es visible
-                    const navbarH = document.querySelector('.navbar').offsetHeight;
-                    const tabsH = document.querySelector('.tab-controls').offsetHeight;
-                    const calendarHeight = window.innerHeight - navbarH - tabsH - 24;
-                    calendar.setOption('height', calendarHeight);
                     calendar.updateSize();
                 }, 80);
             }
@@ -854,7 +860,7 @@
                 document.getElementById('turno-inicio').value = localStr;
             }
 
-            document.getElementById('turno-titulo').value = 'Turno Estética';
+            document.getElementById('turno-titulo').value = 'Turno';
             document.getElementById('turno-modal').classList.add('active');
         }
 
@@ -868,7 +874,7 @@
             populateClientesDropdown(clientesCache);
             document.getElementById('turno-cliente-id').value = props.clienteId;
 
-            document.getElementById('turno-titulo').value = props.tituloOriginal || 'Turno Estética';
+            document.getElementById('turno-titulo').value = props.tituloOriginal || 'Turno';
             // Usar la fecha local del evento sin convertir a UTC
             const evStart = eventObj.start;
             const pad = n => String(n).padStart(2, '0');
@@ -889,7 +895,7 @@
 
             const payload = {
                 clienteId: parseInt(document.getElementById('turno-cliente-id').value),
-                titulo: document.getElementById('turno-titulo').value || 'Turno Estética',
+                titulo: document.getElementById('turno-titulo').value || 'Turno',
                 fechaInicio: startStr + ':00', // "YYYY-MM-DDTHH:mm:ss" sin zona → el server lo toma como local
                 fechaFin: endStr,
                 estado: 'confirmado',
