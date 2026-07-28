@@ -3,7 +3,7 @@ namespace TurneroWorker.Models;
 public class Turno
 {
     public int Id { get; set; }
-    public int ClienteId { get; set; }
+    public int? ClienteId { get; set; }
     public string Titulo { get; set; } = string.Empty;
     public DateTime FechaInicio { get; set; }
     public DateTime FechaFin { get; set; }

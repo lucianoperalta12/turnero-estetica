@@ -1105,19 +1105,15 @@
             const pad = n => String(n).padStart(2, '0');
             const endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth()+1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
 
+            const rawClienteId = document.getElementById('turno-cliente-id').value;
             const payload = {
-                clienteId: parseInt(document.getElementById('turno-cliente-id').value),
+                clienteId: rawClienteId ? parseInt(rawClienteId) : null,
                 titulo: document.getElementById('turno-titulo').value || 'Turno',
                 fechaInicio: startStr + ':00', // "YYYY-MM-DDTHH:mm:ss" sin zona → el server lo toma como local
                 fechaFin: endStr,
                 estado: 'confirmado',
                 notas: ''
             };
-
-            if (!payload.clienteId) {
-                alert('Debe seleccionar una clienta.');
-                return;
-            }
 
             const method = id ? 'PUT' : 'POST';
             const url = id ? `/api/turnos/${id}` : '/api/turnos';

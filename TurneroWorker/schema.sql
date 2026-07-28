@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS turnero.clientes (
 -- Tabla de Turnos (relacionado con Clientes, fecha inicio y fin, estado y control de recordatorio)
 CREATE TABLE IF NOT EXISTS turnero.turnos (
     id SERIAL PRIMARY KEY,
-    cliente_id INT NOT NULL REFERENCES turnero.clientes(id) ON DELETE CASCADE,
+    cliente_id INT REFERENCES turnero.clientes(id) ON DELETE CASCADE,
     titulo VARCHAR(150) NOT NULL,
     fecha_inicio TIMESTAMP NOT NULL,
     fecha_fin TIMESTAMP NOT NULL,

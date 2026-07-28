@@ -27,7 +27,9 @@ public class TurnosController : ControllerBase
         var eventos = turnos.Select(t => new
         {
             id = t.Id,
-            title = $"{t.Cliente?.Nombre ?? "Cliente"} - {t.Titulo}",
+            title = t.Cliente != null && !string.IsNullOrWhiteSpace(t.Cliente.Nombre) 
+                ? $"{t.Cliente.Nombre} - {t.Titulo}" 
+                : t.Titulo,
             start = t.FechaInicio.ToString("yyyy-MM-ddTHH:mm:ss"),
             end = t.FechaFin.ToString("yyyy-MM-ddTHH:mm:ss"),
             extendedProps = new
@@ -48,9 +50,9 @@ public class TurnosController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CrearTurno([FromBody] Turno turno)
     {
-        if (turno.ClienteId <= 0 || string.IsNullOrWhiteSpace(turno.Titulo))
+        if (string.IsNullOrWhiteSpace(turno.Titulo))
         {
-            return BadRequest("Debe seleccionar un cliente e ingresar un título.");
+            return BadRequest("Debe ingresar un título o tratamiento.");
         }
 
         if (turno.FechaFin <= turno.FechaInicio)

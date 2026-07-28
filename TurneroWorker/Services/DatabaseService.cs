@@ -33,7 +33,7 @@ public class DatabaseService
 
             CREATE TABLE IF NOT EXISTS turnero.turnos (
                 id SERIAL PRIMARY KEY,
-                cliente_id INT NOT NULL REFERENCES turnero.clientes(id) ON DELETE CASCADE,
+                cliente_id INT REFERENCES turnero.clientes(id) ON DELETE CASCADE,
                 titulo VARCHAR(150) NOT NULL,
                 fecha_inicio TIMESTAMP NOT NULL,
                 fecha_fin TIMESTAMP NOT NULL,
@@ -113,7 +113,7 @@ public class DatabaseService
                    t.notas, t.fecha_creacion as FechaCreacion,
                    c.id, c.nombre, c.telefono, c.email, c.notas
             FROM turnero.turnos t
-            INNER JOIN turnero.clientes c ON t.cliente_id = c.id
+            LEFT JOIN turnero.clientes c ON t.cliente_id = c.id
             WHERE t.fecha_inicio >= @Inicio AND t.fecha_inicio <= @Fin
             ORDER BY t.fecha_inicio ASC";
 
@@ -168,7 +168,7 @@ public class DatabaseService
                    t.notas, t.fecha_creacion as FechaCreacion,
                    c.id, c.nombre, c.telefono, c.email, c.notas
             FROM turnero.turnos t
-            INNER JOIN turnero.clientes c ON t.cliente_id = c.id
+            LEFT JOIN turnero.clientes c ON t.cliente_id = c.id
             WHERE t.fecha_inicio >= @InicioDia AND t.fecha_inicio <= @FinDia
               AND t.recordatorio_enviado = FALSE
               AND t.estado != 'cancelado'
