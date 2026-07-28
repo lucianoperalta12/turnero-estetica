@@ -32,7 +32,9 @@ builder.Services.AddHostedService<Worker>();
 
 var app = builder.Build();
 
-// Inicializar tablas en PostgreSQL al arrancar la app
+// Inicializar tablas en PostgreSQL al arrancar la app y verificar flag --force
+bool forceExecution = args.Any(arg => arg.Equals("--force", StringComparison.OrdinalIgnoreCase) || arg.Equals("-f", StringComparison.OrdinalIgnoreCase));
+
 using (var scope = app.Services.CreateScope())
 {
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -46,6 +48,13 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         logger.LogWarning(ex, "No se pudo auto-inicializar la BD (verificar conexión PostgreSQL).");
+    }
+
+    if (forceExecution)
+    {
+        logger.LogInformation("[CLI] Flag --force detectado. Ejecutando ciclo de recordatorios inmediatamente...");
+        var reminderService = scope.ServiceProvider.GetRequiredService<ReminderService>();
+        await reminderService.EjecutarAsync();
     }
 }
 

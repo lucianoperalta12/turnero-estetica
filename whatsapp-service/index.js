@@ -95,7 +95,10 @@ app.post('/send', async (req, res) => {
                     syncFullHistory: false
                 });
 
-                sock.ev.on('creds.update', saveCreds);
+                sock.ev.on('creds.update', (update) => {
+                    console.log(`[Baileys] [${new Date().toISOString()}] Actualizando credenciales en disco...`);
+                    saveCreds(update);
+                });
 
                 // Esperar resolución de la conexión
                 await new Promise((resolve, reject) => {
@@ -166,17 +169,17 @@ app.post('/send', async (req, res) => {
                 const messageId = sendResponse?.key?.id;
                 console.log(`[Baileys] [${new Date().toISOString()}] Fin de llamada sendMessage. ID asignado: ${messageId}`);
 
-                // Mantener el socket abierto durante 15 segundos fijos para asegurar la sincronización completa
-                // del cifrado de extremo a extremo (E2EE) y la confirmación interna en el dispositivo principal.
-                console.log(`[Baileys] [${new Date().toISOString()}] Esperando 15 segundos fijos antes de cerrar la conexión...`);
-                await new Promise(r => setTimeout(r, 15000));
+                // Mantener el socket abierto durante 5 segundos para asegurar entrega de paquetes
+                console.log(`[Baileys] [${new Date().toISOString()}] Esperando 5 segundos antes de cerrar el socket temporal...`);
+                await new Promise(r => setTimeout(r, 5000));
 
                 return { ok: true, messageId };
 
             } finally {
                 if (sock) {
-                    console.log(`[Baileys] [${new Date().toISOString()}] Ejecución de sock.end().`);
+                    console.log(`[Baileys] [${new Date().toISOString()}] Cerrando socket y desconectando sesión...`);
                     try {
+                        sock.ws?.close();
                         sock.end();
                     } catch (err) {
                         console.error('[Baileys] Error al cerrar socket en block finally:', err.stack || err);
