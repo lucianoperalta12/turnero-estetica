@@ -72,7 +72,7 @@ public class ReminderService
             {
                 EventId = turno.Id.ToString(),
                 Nombre = turno.Cliente.Nombre,
-                Telefono = turno.Cliente.Telefono,
+                Telefono = NormalizarTelefono(turno.Cliente.Telefono),
                 Fecha = DateOnly.FromDateTime(turno.FechaInicio),
                 Hora = turno.FechaInicio.ToString("HH:mm")
             };
@@ -116,5 +116,36 @@ public class ReminderService
 
         _logger.LogInformation("=== Ciclo finalizado: {Enviados} enviados, {Errores} errores, {Total} total ===",
             enviados, errores, listaTurnos.Count);
+    }
+
+    /// <summary>
+    /// Limpia y normaliza números de teléfono al formato internacional (ej. Argentina 549...).
+    /// </summary>
+    private static string NormalizarTelefono(string rawPhone)
+    {
+        if (string.IsNullOrWhiteSpace(rawPhone)) return string.Empty;
+
+        // Mantener solo dígitos
+        var digits = new string(rawPhone.Where(char.IsDigit).ToArray());
+
+        // Remover '0' inicial de código de área (ej: 03564 -> 3564)
+        if (digits.StartsWith("0"))
+        {
+            digits = digits.Substring(1);
+        }
+
+        // Si empieza con 15 (móvil local Argentina), quitarlo si viene después del área o ajustarlo
+        // Si el número tiene 10 dígitos (ej: 3564562288) y no incluye 54 / 549:
+        if (digits.Length == 10)
+        {
+            digits = "549" + digits;
+        }
+        else if (digits.Length == 11 && digits.StartsWith("54") && !digits.StartsWith("549"))
+        {
+            // Ejemplo 54 3564562288 -> agregar el 9 móvil -> 5493564562288
+            digits = "549" + digits.Substring(2);
+        }
+
+        return digits;
     }
 }

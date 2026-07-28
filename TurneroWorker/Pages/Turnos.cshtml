@@ -287,7 +287,7 @@
             color: white !important;
         }
 
-        /* High Contrast Black Text on Calendar Cards */
+        /* High Contrast Text on Calendar Cards & Reminder Sent Badge */
         .fc-event, .fc-event-main, .fc-event-title, .fc-event-time {
             background-color: #fce7f3 !important;
             border: 1.5px solid var(--primary-border) !important;
@@ -297,6 +297,11 @@
             font-size: 0.8rem !important;
             font-weight: 700 !important;
             cursor: pointer;
+        }
+
+        .turno-enviado {
+            background-color: #dcfce7 !important;
+            border-color: #86efac !important;
         }
 
         .fc-timegrid-slot {
@@ -682,6 +687,15 @@
                 allDaySlot: false,
                 selectable: true,
                 events: '/api/turnos',
+                eventDidMount: function(info) {
+                    if (info.event.extendedProps && info.event.extendedProps.recordatorioEnviado) {
+                        info.el.classList.add('turno-enviado');
+                        const titleEl = info.el.querySelector('.fc-event-title');
+                        if (titleEl && !titleEl.innerHTML.includes('fa-whatsapp')) {
+                            titleEl.innerHTML = `<i class="fa-brands fa-whatsapp" style="color: #16a34a; margin-right: 3px;" title="Recordatorio WhatsApp Enviado"></i> ` + titleEl.innerHTML;
+                        }
+                    }
+                },
                 select: function (info) {
                     openNewTurnoModal(info.startStr);
                 },
