@@ -46,6 +46,27 @@ public class DatabaseService
             CREATE INDEX IF NOT EXISTS idx_turnos_fecha_inicio ON turnero.turnos(fecha_inicio);
             CREATE INDEX IF NOT EXISTS idx_turnos_cliente_id ON turnero.turnos(cliente_id);
             CREATE INDEX IF NOT EXISTS idx_turnos_recordatorio ON turnero.turnos(fecha_inicio, recordatorio_enviado);
+
+            CREATE TABLE IF NOT EXISTS turnero.whatsapp_error_log (
+                id                  SERIAL PRIMARY KEY,
+                turno_id            INT REFERENCES turnero.turnos(id) ON DELETE SET NULL,
+                cliente_id          INT REFERENCES turnero.clientes(id) ON DELETE SET NULL,
+                telefono_destino    VARCHAR(30),
+                tipo_error          VARCHAR(30) NOT NULL,
+                http_status_code    INT,
+                message_id          VARCHAR(100),
+                raw_response        TEXT,
+                error_message       TEXT,
+                stack_trace         TEXT,
+                fecha_ocurrencia    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                resuelto            BOOLEAN NOT NULL DEFAULT FALSE,
+                notas_resolucion    TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_wa_errlog_turno_id  ON turnero.whatsapp_error_log(turno_id);
+            CREATE INDEX IF NOT EXISTS idx_wa_errlog_fecha      ON turnero.whatsapp_error_log(fecha_ocurrencia DESC);
+            CREATE INDEX IF NOT EXISTS idx_wa_errlog_tipo_error ON turnero.whatsapp_error_log(tipo_error);
+            CREATE INDEX IF NOT EXISTS idx_wa_errlog_resuelto   ON turnero.whatsapp_error_log(resuelto) WHERE resuelto = FALSE;
         ";
         await conn.ExecuteAsync(sql);
     }
@@ -190,5 +211,42 @@ public class DatabaseService
         using var conn = CreateConnection();
         var sql = "UPDATE turnero.turnos SET recordatorio_enviado = TRUE WHERE id = @Id";
         await conn.ExecuteAsync(sql, new { Id = turnoId });
+    }
+
+    // ── ERROR LOG WHATSAPP ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Registra un error de envío de WhatsApp en la tabla de log.
+    /// </summary>
+    public async Task RegistrarErrorWhatsAppAsync(
+        int? turnoId,
+        int? clienteId,
+        string? telefonoDestino,
+        Models.TipoErrorWhatsApp tipoError,
+        int? httpStatusCode,
+        string? rawResponse,
+        string? errorMessage,
+        string? stackTrace)
+    {
+        using var conn = CreateConnection();
+        var sql = @"
+            INSERT INTO turnero.whatsapp_error_log
+                (turno_id, cliente_id, telefono_destino, tipo_error,
+                 http_status_code, raw_response, error_message, stack_trace)
+            VALUES
+                (@TurnoId, @ClienteId, @TelefonoDestino, @TipoError,
+                 @HttpStatusCode, @RawResponse, @ErrorMessage, @StackTrace);";
+
+        await conn.ExecuteAsync(sql, new
+        {
+            TurnoId         = (object?)turnoId ?? DBNull.Value,
+            ClienteId       = (object?)clienteId ?? DBNull.Value,
+            TelefonoDestino = telefonoDestino,
+            TipoError       = tipoError.ToString(),
+            HttpStatusCode  = (object?)httpStatusCode ?? DBNull.Value,
+            RawResponse     = rawResponse,
+            ErrorMessage    = errorMessage,
+            StackTrace      = stackTrace
+        });
     }
 }

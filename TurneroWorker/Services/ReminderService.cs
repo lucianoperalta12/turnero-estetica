@@ -91,6 +91,10 @@ public class ReminderService
             {
                 _logger.LogError(ex, "Excepción al enviar WhatsApp para el turno Id={Id}", turno.Id);
                 errores++;
+                await RegistrarErrorSilenciosoAsync(
+                    turno, turnoInfo.Telefono,
+                    TipoErrorWhatsApp.Otro, null, null,
+                    ex.Message, ex.ToString());
                 continue;
             }
 
@@ -109,6 +113,13 @@ public class ReminderService
             else
             {
                 errores++;
+                await RegistrarErrorSilenciosoAsync(
+                    turno, turnoInfo.Telefono,
+                    resultado.TipoError ?? TipoErrorWhatsApp.Otro,
+                    resultado.StatusCode == 0 ? null : resultado.StatusCode,
+                    resultado.RawResponse,
+                    resultado.Error,
+                    resultado.StackTrace);
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
@@ -147,5 +158,35 @@ public class ReminderService
         }
 
         return digits;
+    }
+
+    /// <summary>
+    /// Registra un error en la tabla de log sin propagar excepciones para no interrumpir el ciclo.
+    /// </summary>
+    private async Task RegistrarErrorSilenciosoAsync(
+        Turno turno,
+        string telefonoDestino,
+        TipoErrorWhatsApp tipoError,
+        int? httpStatusCode,
+        string? rawResponse,
+        string? errorMessage,
+        string? stackTrace)
+    {
+        try
+        {
+            await _dbService.RegistrarErrorWhatsAppAsync(
+                turnoId:         turno.Id,
+                clienteId:       turno.Cliente?.Id,
+                telefonoDestino: telefonoDestino,
+                tipoError:       tipoError,
+                httpStatusCode:  httpStatusCode,
+                rawResponse:     rawResponse,
+                errorMessage:    errorMessage,
+                stackTrace:      stackTrace);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "No se pudo registrar el error de WhatsApp en la BD para turno Id={Id}", turno.Id);
+        }
     }
 }
