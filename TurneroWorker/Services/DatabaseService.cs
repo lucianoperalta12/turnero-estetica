@@ -213,6 +213,34 @@ public class DatabaseService
         await conn.ExecuteAsync(sql, new { Id = turnoId });
     }
 
+    public async Task SetRecordatorioEnviadoAsync(int turnoId, bool enviado)
+    {
+        using var conn = CreateConnection();
+        var sql = "UPDATE turnero.turnos SET recordatorio_enviado = @Enviado WHERE id = @Id";
+        await conn.ExecuteAsync(sql, new { Enviado = enviado, Id = turnoId });
+    }
+
+    public async Task<Turno?> GetTurnoByIdAsync(int id)
+    {
+        using var conn = CreateConnection();
+        var sql = @"
+            SELECT t.id, t.cliente_id as ClienteId, t.titulo, t.fecha_inicio as FechaInicio,
+                   t.fecha_fin as FechaFin, t.estado, t.recordatorio_enviado as RecordatorioEnviado,
+                   t.notas, t.fecha_creacion as FechaCreacion,
+                   c.id, c.nombre, c.telefono, c.email, c.notas
+            FROM turnero.turnos t
+            LEFT JOIN turnero.clientes c ON t.cliente_id = c.id
+            WHERE t.id = @Id";
+
+        var result = await conn.QueryAsync<Turno, Cliente, Turno>(
+            sql,
+            (turno, cliente) => { turno.Cliente = cliente; return turno; },
+            new { Id = id },
+            splitOn: "id");
+
+        return result.FirstOrDefault();
+    }
+
     // ── ERROR LOG WHATSAPP ─────────────────────────────────────────────────────
 
     /// <summary>

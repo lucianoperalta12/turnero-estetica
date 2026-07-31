@@ -744,6 +744,23 @@
                     <label>Tratamiento / Servicio</label>
                     <input type="text" id="turno-titulo" value="Turno Estética" required>
                 </div>
+
+                <!-- Recordatorio WhatsApp (solo visible al editar) -->
+                <div id="recordatorio-section" class="form-group" style="display:none;">
+                    <label style="margin-bottom:0.4rem;">Recordatorio WhatsApp</label>
+                    <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+                        <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.88rem; font-weight:500; text-transform:none; letter-spacing:0; cursor:pointer;">
+                            <input type="checkbox" id="turno-recordatorio-enviado" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer;">
+                            Recordatorio enviado
+                        </label>
+                        <button id="btn-enviar-recordatorio" type="button"
+                            onclick="enviarRecordatorioForzado()"
+                            style="display:flex;align-items:center;gap:0.35rem;background:#22c55e;color:white;border:none;border-radius:0.45rem;padding:0.3rem 0.75rem;font-size:0.82rem;font-weight:600;cursor:pointer;transition:background 0.18s;">
+                            <i class="fa-brands fa-whatsapp"></i>
+                            <span id="btn-enviar-recordatorio-text">Enviar ahora</span>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-header btn-secondary btn-modal-action" onclick="closeModal('turno-modal')">Cancelar</button>
@@ -1093,6 +1110,11 @@
             document.getElementById('turno-inicio').value = localStr;
             document.getElementById('turno-inicio-display').textContent = formatDateTimeDisplay(evStart);
 
+            // Mostrar sección recordatorio y sincronizar checkbox
+            document.getElementById('recordatorio-section').style.display = 'block';
+            document.getElementById('turno-recordatorio-enviado').checked = !!props.recordatorioEnviado;
+            actualizarEstadoBtnEnvio(!!props.recordatorioEnviado);
+
             document.getElementById('turno-modal').classList.add('active');
         }
 
@@ -1124,10 +1146,77 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+                // Ocultar sección recordatorio para nueva cita
+                document.getElementById('recordatorio-section').style.display = 'none';
+                document.getElementById('btn-delete-turno').style.display = 'none';
                 closeModal('turno-modal');
                 calendar.refetchEvents();
             } catch (err) {
                 alert('Error al guardar la cita.');
+            }
+        }
+
+        // Sincronizar aspecto del botón de enviar según estado del checkbox
+        function actualizarEstadoBtnEnvio(enviado) {
+            const btn  = document.getElementById('btn-enviar-recordatorio');
+            const span = document.getElementById('btn-enviar-recordatorio-text');
+            if (enviado) {
+                btn.style.background = '#94a3b8';
+                span.textContent = 'Reenviar';
+            } else {
+                btn.style.background = '#22c55e';
+                span.textContent = 'Enviar ahora';
+            }
+        }
+
+        // Cambio manual del checkbox → PATCH a la API
+        document.getElementById('turno-recordatorio-enviado').addEventListener('change', async function () {
+            const id = document.getElementById('turno-id').value;
+            if (!id) return;
+            const enviado = this.checked;
+            try {
+                await fetch(`/api/turnos/${id}/recordatorio`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enviado })
+                });
+                actualizarEstadoBtnEnvio(enviado);
+                calendar.refetchEvents();
+            } catch (err) {
+                alert('Error al actualizar el recordatorio.');
+                this.checked = !enviado; // revertir
+            }
+        });
+
+        // Forzar envío inmediato del recordatorio WhatsApp
+        async function enviarRecordatorioForzado() {
+            const id = document.getElementById('turno-id').value;
+            if (!id) return;
+
+            const btn  = document.getElementById('btn-enviar-recordatorio');
+            const span = document.getElementById('btn-enviar-recordatorio-text');
+            btn.disabled = true;
+            span.textContent = 'Enviando...';
+
+            try {
+                const res = await fetch(`/api/turnos/${id}/enviar-recordatorio`, { method: 'POST' });
+                const data = await res.json();
+
+                if (res.ok && data.ok) {
+                    document.getElementById('turno-recordatorio-enviado').checked = true;
+                    actualizarEstadoBtnEnvio(true);
+                    calendar.refetchEvents();
+                    span.textContent = '✅ Enviado';
+                    setTimeout(() => actualizarEstadoBtnEnvio(true), 2000);
+                } else {
+                    alert('Error al enviar: ' + (data.error || 'Error desconocido'));
+                    actualizarEstadoBtnEnvio(document.getElementById('turno-recordatorio-enviado').checked);
+                }
+            } catch (err) {
+                alert('Error de red al enviar el recordatorio.');
+                actualizarEstadoBtnEnvio(document.getElementById('turno-recordatorio-enviado').checked);
+            } finally {
+                btn.disabled = false;
             }
         }
 
