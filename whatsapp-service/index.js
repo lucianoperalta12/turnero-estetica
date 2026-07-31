@@ -199,6 +199,11 @@ app.post('/send', async (req, res) => {
         const messageId    = sendResponse?.key?.id;
         console.log(`[Baileys] [${new Date().toISOString()}] ✅ Enviado. messageId=${messageId}`);
 
+        // Marcar la cuenta como "desconectada / offline" inmediatamente
+        try {
+            await sock.sendPresenceUpdate('unavailable');
+        } catch (_) {}
+
         return res.json({ ok: true, messageId });
 
     } catch (err) {
