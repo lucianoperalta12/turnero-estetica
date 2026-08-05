@@ -19,56 +19,18 @@ const PORT      = process.env.PORT || 3000;
 
 const logger = pino({ level: 'silent' });
 
-// ─── Estado global del socket persistente ────────────────────────────────────
+// ─── Estado del flujo QR (único socket que puede estar "vivo" fuera de un envío) ─
+let qrSocket     = null;
+let currentQR    = null;
+let qrTimestamp  = null;
+let qrFlowStatus = 'idle'; // 'idle' | 'connecting' | 'waiting_qr' | 'authenticated'
 
-let sock            = null;
-let isReady         = false;   // true cuando connection === 'open'
-let isReconnecting  = false;
-let currentQR       = null;
-let qrTimestamp     = null;
-let connectionStatus = 'desconectado';
-
-// Promesa que se resuelve cuando el socket pasa a 'open'
-let readyResolvers = [];
-
-function waitUntilReady(timeoutMs = 30000) {
-    if (isReady) return Promise.resolve();
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            readyResolvers = readyResolvers.filter(r => r.resolve !== resolve);
-            reject(new Error('Timeout esperando conexión con WhatsApp.'));
-        }, timeoutMs);
-
-        readyResolvers.push({
-            resolve: () => { clearTimeout(timer); resolve(); },
-            reject:  (e) => { clearTimeout(timer); reject(e); }
-        });
-    });
-}
-
-function flushReadyResolvers(error = null) {
-    const resolvers = readyResolvers;
-    readyResolvers = [];
-    for (const r of resolvers) {
-        if (error) r.reject(error);
-        else r.resolve();
-    }
-}
-
-// ─── Iniciar / reconectar socket ─────────────────────────────────────────────
-
-async function startSocket() {
-    if (isReconnecting) return;
-    isReconnecting = true;
-    isReady        = false;
-    connectionStatus = 'conectando';
-
-    console.log(`[Baileys] [${new Date().toISOString()}] Iniciando conexión persistente...`);
-
+// ─── Crear socket one-shot ────────────────────────────────────────────────────
+async function createSocket() {
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version }          = await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
+    const s = makeWASocket({
         version,
         auth: {
             creds: state.creds,
@@ -76,75 +38,84 @@ async function startSocket() {
         },
         printQRInTerminal: false,
         logger,
-        browser:            ['Mac OS', 'Chrome', '121.0.0'],
+        browser:            ['Turnero', 'Chrome', '121.0.0'],
         markOnlineOnConnect: false,
-        syncFullHistory:    false,
-        // Mantiene el socket vivo con pings internos
-        keepAliveIntervalMs: 30_000
+        syncFullHistory:    false
+        // Sin keepAliveIntervalMs → sin reconexión automática
     });
 
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-            currentQR    = qr;
-            qrTimestamp  = Date.now();
-            connectionStatus = 'esperando QR';
-            console.log(`[Baileys] Nuevo QR generado.`);
-            try { await QRCode.toFile(QR_PATH, qr, { scale: 8 }); } catch (_) {}
-        }
-
-        if (connection === 'open') {
-            console.log(`[Baileys] [${new Date().toISOString()}] ✅ Conectado. Socket persistente listo.`);
-            isReady         = true;
-            isReconnecting  = false;
-            currentQR       = null;
-            connectionStatus = 'conectado';
-            flushReadyResolvers();
-        }
-
-        if (connection === 'close') {
-            isReady = false;
-            const error      = lastDisconnect?.error;
-            const statusCode = (error instanceof Boom) ? error.output.statusCode : null;
-            console.warn(`[Baileys] [${new Date().toISOString()}] Conexión cerrada. StatusCode=${statusCode}`);
-
-            // Sesión revocada → limpiar credenciales y esperar QR
-            if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-                console.error('[Baileys] Sesión expirada. Limpiando credenciales...');
-                connectionStatus = 'desconectado';
-                flushReadyResolvers(new Error('REQUERIDA_VINCULACION'));
-                try { fs.rmSync(AUTH_DIR, { recursive: true, force: true }); } catch (_) {}
-                isReconnecting = false;
-                return;
-            }
-
-            // Cualquier otro cierre → reconectar con backoff
-            connectionStatus = 'reconectando';
-            flushReadyResolvers(new Error('Reconectando...'));
-            isReconnecting = false;
-            const delay = statusCode === 408 ? 10_000 : 5_000;
-            console.log(`[Baileys] Reconectando en ${delay / 1000}s...`);
-            setTimeout(startSocket, delay);
-        }
-    });
+    s.ev.on('creds.update', saveCreds);
+    return s;
 }
 
-// ─── Arrancar socket al inicio (si ya hay credenciales) ──────────────────────
+// ─── Enviar mensaje (connect → send → disconnect) ─────────────────────────────
+async function sendWhatsAppMessage(phone, message) {
+    const s = await createSocket();
 
-if (fs.existsSync(join(AUTH_DIR, 'creds.json'))) {
-    startSocket().catch(err => {
-        console.error('[Baileys] Error en startSocket inicial:', err);
-    });
-} else {
-    console.log('[Baileys] Sin credenciales. Accedé a /qr para vincular.');
-    connectionStatus = 'desconectado';
+    try {
+        // Esperar que el socket quede 'open'
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Timeout esperando conexión con WhatsApp.'));
+            }, 30_000);
+
+            s.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+                if (connection === 'open') {
+                    clearTimeout(timeout);
+                    resolve();
+                }
+                if (connection === 'close') {
+                    clearTimeout(timeout);
+                    const statusCode = (lastDisconnect?.error instanceof Boom)
+                        ? lastDisconnect.error.output.statusCode
+                        : null;
+                    if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+                        try { fs.rmSync(AUTH_DIR, { recursive: true, force: true }); } catch (_) {}
+                        reject(new Error('REQUERIDA_VINCULACION'));
+                    } else {
+                        reject(new Error(`Conexión cerrada. StatusCode=${statusCode}`));
+                    }
+                }
+            });
+        });
+
+        // Resolver JID
+        let jid;
+        const isSpecial = ['admin', 'self'].includes(phone.toLowerCase());
+
+        if (isSpecial) {
+            const selfNumber = s.user?.id?.split(':')[0] || s.user?.id;
+            if (!selfNumber) throw new Error('No se pudo determinar el número propio de la sesión.');
+            jid = `${selfNumber.split('@')[0].split(':')[0]}@s.whatsapp.net`;
+            console.log(`[Baileys] Destinatario especial → ${jid}`);
+        } else {
+            jid = `${phone.replace(/\D/g, '')}@s.whatsapp.net`;
+        }
+
+        // Validar número
+        if (!isSpecial) {
+            console.log(`[Baileys] [${new Date().toISOString()}] Validando ${jid}...`);
+            const [onWaResult] = await s.onWhatsApp(jid);
+            if (!onWaResult?.exists) {
+                throw new Error(`El número ${phone.replace(/\D/g, '')} no existe en WhatsApp.`);
+            }
+        }
+
+        // Enviar
+        console.log(`[Baileys] [${new Date().toISOString()}] Enviando mensaje a ${jid}...`);
+        const sendResponse = await s.sendMessage(jid, { text: message });
+        const messageId    = sendResponse?.key?.id;
+        console.log(`[Baileys] [${new Date().toISOString()}] ✅ Enviado. messageId=${messageId}`);
+
+        return messageId;
+
+    } finally {
+        // Siempre cerrar el socket al terminar
+        try { s.end(undefined); } catch (_) {}
+    }
 }
 
 // ─── Express ──────────────────────────────────────────────────────────────────
-
 const app = express();
 app.use(express.json());
 
@@ -156,56 +127,15 @@ app.post('/send', async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Faltan campos obligatorios: phone y message.' });
     }
 
+    if (!fs.existsSync(join(AUTH_DIR, 'creds.json'))) {
+        return res.status(503).json({ ok: false, error: 'REQUERIDA_VINCULACION' });
+    }
+
     console.log(`[HTTP] [${new Date().toISOString()}] Enviar a ${phone}`);
 
     try {
-        // Si no hay credenciales, rechazar de inmediato
-        if (!fs.existsSync(join(AUTH_DIR, 'creds.json'))) {
-            return res.status(503).json({ ok: false, error: 'REQUERIDA_VINCULACION' });
-        }
-
-        // Esperar hasta que el socket esté listo (máx 30 s)
-        await waitUntilReady(30_000);
-
-        // Resolver JID
-        let jid;
-        const isSpecial = (phone.toLowerCase() === 'admin' || phone.toLowerCase() === 'self');
-
-        if (isSpecial) {
-            const selfNumber = sock.user?.id?.split(':')[0] || sock.user?.id;
-            if (!selfNumber) throw new Error('No se pudo determinar el número propio de la sesión.');
-            jid = `${selfNumber.split('@')[0].split(':')[0]}@s.whatsapp.net`;
-            console.log(`[Baileys] Destinatario especial → ${jid}`);
-        } else {
-            const cleanPhone = phone.replace(/\D/g, '');
-            jid = `${cleanPhone}@s.whatsapp.net`;
-        }
-
-        // Validar número
-        if (!isSpecial) {
-            console.log(`[Baileys] [${new Date().toISOString()}] Validando ${jid}...`);
-            const [onWaResult] = await sock.onWhatsApp(jid);
-            if (!onWaResult?.exists) {
-                const cleanPhone = phone.replace(/\D/g, '');
-                console.warn(`[Baileys] Número ${cleanPhone} no registrado en WhatsApp.`);
-                throw new Error(`El número ${cleanPhone} no existe en WhatsApp.`);
-            }
-            console.log(`[Baileys] [${new Date().toISOString()}] Número validado.`);
-        }
-
-        // Enviar
-        console.log(`[Baileys] [${new Date().toISOString()}] Enviando mensaje a ${jid}...`);
-        const sendResponse = await sock.sendMessage(jid, { text: message });
-        const messageId    = sendResponse?.key?.id;
-        console.log(`[Baileys] [${new Date().toISOString()}] ✅ Enviado. messageId=${messageId}`);
-
-        // Marcar la cuenta como "desconectada / offline" inmediatamente
-        try {
-            await sock.sendPresenceUpdate('unavailable');
-        } catch (_) {}
-
+        const messageId = await sendWhatsAppMessage(phone, message);
         return res.json({ ok: true, messageId });
-
     } catch (err) {
         console.error('[HTTP] Error durante el envío:', err.stack || err);
         if (err.message === 'REQUERIDA_VINCULACION') {
@@ -219,13 +149,58 @@ app.post('/send', async (req, res) => {
 app.get('/qr', async (req, res) => {
     const hasCreds = fs.existsSync(join(AUTH_DIR, 'creds.json'));
 
-    if (hasCreds && connectionStatus !== 'esperando QR') {
+    if (hasCreds && qrFlowStatus !== 'waiting_qr') {
         return res.send('<h2>✅ WhatsApp ya está conectado o tiene una sesión activa en el VPS.</h2>');
     }
 
-    // Si todavía no se está conectando, arrancar
-    if (!isReconnecting && !isReady) {
-        startSocket().catch(err => console.error('[QR] Error startSocket:', err));
+    // Arrancar socket QR si no hay uno activo
+    if (!qrSocket && qrFlowStatus === 'idle') {
+        qrFlowStatus = 'connecting';
+
+        const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+        const { version }          = await fetchLatestBaileysVersion();
+
+        qrSocket = makeWASocket({
+            version,
+            auth: {
+                creds: state.creds,
+                keys:  makeCacheableSignalKeyStore(state.keys, logger)
+            },
+            printQRInTerminal: false,
+            logger,
+            browser:         ['Turnero', 'Chrome', '121.0.0'],
+            markOnlineOnConnect: false,
+            syncFullHistory: false
+        });
+
+        qrSocket.ev.on('creds.update', saveCreds);
+
+        qrSocket.ev.on('connection.update', async ({ connection, qr }) => {
+            if (qr) {
+                currentQR    = qr;
+                qrTimestamp  = Date.now();
+                qrFlowStatus = 'waiting_qr';
+                try { await QRCode.toFile(QR_PATH, qr, { scale: 8 }); } catch (_) {}
+            }
+
+            if (connection === 'open') {
+                console.log(`[Baileys] [${new Date().toISOString()}] ✅ QR escaneado. Sesión guardada.`);
+                qrFlowStatus = 'authenticated';
+                currentQR    = null;
+                // Desconectar limpiamente luego de guardar las creds
+                setTimeout(() => {
+                    try { qrSocket?.end(undefined); } catch (_) {}
+                    qrSocket     = null;
+                    qrFlowStatus = 'idle';
+                }, 2000);
+            }
+
+            if (connection === 'close') {
+                qrSocket     = null;
+                qrFlowStatus = 'idle';
+                currentQR    = null;
+            }
+        });
     }
 
     if (!currentQR) {
@@ -268,14 +243,15 @@ app.get('/qr', async (req, res) => {
 
 // GET /status
 app.get('/status', (_req, res) => {
+    const hasCreds = fs.existsSync(join(AUTH_DIR, 'creds.json'));
     res.json({
         ok:     true,
-        status: connectionStatus,
-        ready:  isReady,
-        number: sock?.user?.id?.split(':')[0] ?? null
+        status: hasCreds ? 'credenciales_ok' : 'desconectado',
+        ready:  hasCreds,
+        qrFlow: qrFlowStatus
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`[HTTP] Servicio WhatsApp persistente escuchando en puerto ${PORT}`);
+    console.log(`[HTTP] Servicio WhatsApp escuchando en puerto ${PORT}`);
 });
