@@ -101,6 +101,9 @@ async function sendWhatsAppMessage(phone, message) {
             }
         }
 
+        // Ir offline antes de enviar para no quedar como "en línea"
+        try { await s.sendPresenceUpdate('unavailable'); } catch (_) {}
+
         // Enviar
         console.log(`[Baileys] [${new Date().toISOString()}] Enviando mensaje a ${jid}...`);
         const sendResponse = await s.sendMessage(jid, { text: message });
@@ -110,8 +113,8 @@ async function sendWhatsAppMessage(phone, message) {
         return messageId;
 
     } finally {
-        // Siempre cerrar el socket al terminar
-        try { s.end(undefined); } catch (_) {}
+        // Cerrar el WebSocket directamente para que la cuenta no quede online
+        try { s.ws?.close(); } catch (_) {}
     }
 }
 
@@ -189,7 +192,7 @@ app.get('/qr', async (req, res) => {
                 currentQR    = null;
                 // Desconectar limpiamente luego de guardar las creds
                 setTimeout(() => {
-                    try { qrSocket?.end(undefined); } catch (_) {}
+                    try { qrSocket?.ws?.close(); } catch (_) {}
                     qrSocket     = null;
                     qrFlowStatus = 'idle';
                 }, 2000);
