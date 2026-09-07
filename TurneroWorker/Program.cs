@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,20 @@ builder.Services.Configure<AppSettings>(
 
 // ── HttpClient ───────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient();
+
+// ── Autenticación por Cookie ─────────────────────────────────────────────────
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/login";
+        options.ExpireTimeSpan = TimeSpan.FromDays(400); // máximo soportado por navegadores
+        options.SlidingExpiration = false;
+        options.Cookie.MaxAge = TimeSpan.FromDays(400);
+        options.Cookie.HttpOnly = true;
+        options.Cookie.IsEssential = true;
+    });
+
+builder.Services.AddAuthorization();
 
 // ── Servicios Web & Base de Datos ────────────────────────────────────────────
 builder.Services.AddRazorPages();
@@ -60,6 +75,8 @@ using (var scope = app.Services.CreateScope())
 
 app.UseStaticFiles();
 app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapControllers();
