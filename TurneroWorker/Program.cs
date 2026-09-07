@@ -19,8 +19,8 @@ builder.Services.AddHttpClient();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.LoginPath = "/login";
-        options.ExpireTimeSpan = TimeSpan.FromDays(400); // máximo soportado por navegadores
+        options.LoginPath = "/turnos"; // login está embebido en la misma página
+        options.ExpireTimeSpan = TimeSpan.FromDays(400);
         options.SlidingExpiration = false;
         options.Cookie.MaxAge = TimeSpan.FromDays(400);
         options.Cookie.HttpOnly = true;

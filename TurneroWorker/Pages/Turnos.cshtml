@@ -1,6 +1,5 @@
 @page "/turnos"
-@using Microsoft.AspNetCore.Authorization
-@attribute [Authorize]
+@model TurneroWorker.Pages.TurnosModel
 @{
     Layout = null;
 }
@@ -1243,5 +1242,54 @@
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
     </script>
+
+    @if (!Model.IsAuthenticated)
+    {
+    <div id="login-overlay" style="
+        position:fixed;inset:0;z-index:99999;
+        background:rgba(255,245,247,0.97);
+        display:flex;align-items:center;justify-content:center;
+        backdrop-filter:blur(4px);
+    ">
+        <div style="
+            background:#fff;border-radius:1.25rem;
+            box-shadow:0 10px 25px -5px rgb(219 39 119/0.25);
+            padding:2.5rem 2rem;width:100%;max-width:360px;
+            display:flex;flex-direction:column;align-items:center;gap:1.25rem;
+        ">
+            <div style="width:64px;height:64px;background:#fdf2f8;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fbcfe8;">
+                <i class="fa-solid fa-scissors" style="font-size:1.75rem;color:#db2777;"></i>
+            </div>
+            <div style="text-align:center;">
+                <h1 style="font-size:1.2rem;font-weight:700;color:#0f172a;">Estética Turnos</h1>
+                <p style="font-size:0.85rem;color:#64748b;margin-top:0.3rem;">Ingresá para continuar</p>
+            </div>
+
+            @if (Model.LoginError)
+            {
+            <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:0.6rem;padding:0.6rem 0.9rem;font-size:0.85rem;color:#dc2626;width:100%;display:flex;align-items:center;gap:0.5rem;">
+                <i class="fa-solid fa-circle-exclamation"></i> Usuario o contraseña incorrectos.
+            </div>
+            }
+
+            <form method="post" style="width:100%;display:flex;flex-direction:column;gap:0.9rem;">
+                <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                    <label style="font-size:0.75rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Usuario</label>
+                    <input name="LoginUsername" type="text" autocomplete="username" autofocus required placeholder="Usuario"
+                        style="border:1.5px solid #fbcfe8;border-radius:0.6rem;padding:0.65rem 0.9rem;font-size:1rem;color:#0f172a;outline:none;font-family:inherit;" />
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                    <label style="font-size:0.75rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Contraseña</label>
+                    <input name="LoginPassword" type="password" autocomplete="current-password" required placeholder="Contraseña"
+                        style="border:1.5px solid #fbcfe8;border-radius:0.6rem;padding:0.65rem 0.9rem;font-size:1rem;color:#0f172a;outline:none;font-family:inherit;" />
+                </div>
+                <button type="submit" style="background:#db2777;color:#fff;border:none;border-radius:0.7rem;padding:0.75rem;font-size:1rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:0.5rem;font-family:inherit;">
+                    <i class="fa-solid fa-right-to-bracket"></i> Ingresar
+                </button>
+            </form>
+        </div>
+    </div>
+    }
+
 </body>
 </html>
