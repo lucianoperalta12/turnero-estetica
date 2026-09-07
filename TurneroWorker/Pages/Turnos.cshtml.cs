@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -6,6 +6,7 @@ using System.Security.Claims;
 
 namespace TurneroWorker.Pages;
 
+[IgnoreAntiforgeryToken]
 public class TurnosModel : PageModel
 {
     private readonly IConfiguration _config;
