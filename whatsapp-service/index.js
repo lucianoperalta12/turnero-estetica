@@ -113,7 +113,8 @@ async function sendWhatsAppMessage(phone, message) {
         return messageId;
 
     } finally {
-        // Cerrar el WebSocket directamente para que la cuenta no quede online
+        // Pausa breve para permitir que WhatsApp sincronice las claves con el teléfono emisor
+        await new Promise(r => setTimeout(r, 3500));
         try { s.ws?.close(); } catch (_) {}
     }
 }
