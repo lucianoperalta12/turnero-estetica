@@ -1,6 +1,6 @@
 # TurneroWorker
 
-Worker Service en .NET 8 que lee Google Calendar dos veces por día, busca turnos del día siguiente y envía recordatorios automáticos por WhatsApp Cloud API.
+Worker Service en .NET 10 que lee Google Calendar dos veces por día, busca turnos del día siguiente y envía recordatorios automáticos por WhatsApp Cloud API.
 
 ## Configuración
 

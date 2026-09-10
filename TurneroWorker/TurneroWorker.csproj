@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-TurneroWorker-12af2496-6ace-4410-b6eb-14a51109ce86</UserSecretsId>
@@ -13,8 +13,6 @@
     <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
     <PackageReference Include="Npgsql" Version="8.0.3" />
     <PackageReference Include="Dapper" Version="2.1.35" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
   </ItemGroup>
 
 </Project>
