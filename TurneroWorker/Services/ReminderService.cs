@@ -155,7 +155,9 @@ public class ReminderService
                     resultado.StackTrace);
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            var delaySegundos = Random.Shared.Next(5, 41);
+            _logger.LogInformation("Pausa aleatoria de {Segundos}s antes del próximo envío...", delaySegundos);
+            await Task.Delay(TimeSpan.FromSeconds(delaySegundos), cancellationToken);
         }
 
         _logger.LogInformation("Lote procesado: {Enviados} enviados, {Errores} errores, {Total} total",
