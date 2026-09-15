@@ -30,6 +30,7 @@
             --shadow-sm: 0 1px 3px 0 rgb(219 39 119 / 0.08);
             --shadow-md: 0 4px 12px -2px rgb(219 39 119 / 0.15);
             --shadow-lg: 0 10px 25px -5px rgb(219 39 119 / 0.25);
+            --fc-event-text-color: #000000;
         }
 
         * {
@@ -294,10 +295,10 @@
         }
 
         /* High Contrast Text on Calendar Cards & Reminder Sent Badge */
-        .fc-event, .fc-event-main {
+        .fc-event, .fc-event-main, .fc-event-title, .fc-event-time, .fc-event-title-container {
             background-color: #fce7f3;
             border: 1.5px solid var(--primary-border);
-            color: #0f172a;
+            color: #000000 !important;
             border-radius: 0.4rem;
             padding: 1px 3px;
             font-size: 0.78rem;
@@ -306,30 +307,39 @@
             cursor: pointer;
         }
 
-        .fc-event-title, .fc-event-time {
-            color: inherit;
+        .fc-event-title, .fc-event-time, .fc-event-main * {
+            color: #000000 !important;
             font-size: 0.78rem;
             font-weight: 700;
             line-height: 1.2;
         }
 
         /* Depilación: Lavanda / Violeta suave bien diferenciado a golpe de vista */
-        .turno-depilacion, .turno-depilacion .fc-event-main, .turno-depilacion .fc-event-title, .turno-depilacion .fc-event-time {
+        .turno-depilacion, .turno-depilacion .fc-event-main {
             background-color: #ede9fe !important;
             border-color: #c4b5fd !important;
-            color: #5b21b6 !important;
+        }
+
+        .turno-depilacion, .turno-depilacion *, .turno-depilacion .fc-event-main * {
+            color: #000000 !important;
         }
 
         .turno-enviado, .turno-enviado .fc-event-main {
             background-color: #dcfce7 !important;
             border-color: #86efac !important;
-            color: #14532d !important;
+        }
+
+        .turno-enviado, .turno-enviado *, .turno-enviado .fc-event-main * {
+            color: #000000 !important;
         }
 
         .turno-depilacion.turno-enviado, .turno-depilacion.turno-enviado .fc-event-main {
             background-color: #e0e7ff !important;
             border-color: #818cf8 !important;
-            color: #312e81 !important;
+        }
+
+        .turno-depilacion.turno-enviado, .turno-depilacion.turno-enviado *, .turno-depilacion.turno-enviado .fc-event-main * {
+            color: #000000 !important;
         }
 
         .fc-col-header-cell {
