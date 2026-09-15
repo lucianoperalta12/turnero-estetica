@@ -294,15 +294,23 @@
         }
 
         /* High Contrast Text on Calendar Cards & Reminder Sent Badge */
-        .fc-event, .fc-event-main, .fc-event-title, .fc-event-time {
+        .fc-event, .fc-event-main {
             background-color: #fce7f3;
             border: 1.5px solid var(--primary-border);
             color: #0f172a;
             border-radius: 0.4rem;
-            padding: 2px 4px;
-            font-size: 0.8rem;
+            padding: 1px 3px;
+            font-size: 0.78rem;
+            line-height: 1.25;
             font-weight: 700;
             cursor: pointer;
+        }
+
+        .fc-event-title, .fc-event-time {
+            color: inherit;
+            font-size: 0.78rem;
+            font-weight: 700;
+            line-height: 1.2;
         }
 
         /* Depilación: Lavanda / Violeta suave bien diferenciado a golpe de vista */
@@ -336,7 +344,7 @@
         }
 
         .fc-timegrid-slot {
-            height: 1.3em !important;
+            height: 2.0em !important;
         }
 
         /* Clientes Table Layout & Scrolling */
