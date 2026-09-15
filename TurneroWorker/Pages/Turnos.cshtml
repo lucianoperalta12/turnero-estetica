@@ -295,50 +295,75 @@
         }
 
         /* High Contrast Text on Calendar Cards & Reminder Sent Badge */
-        .fc-event, .fc-event-main, .fc-event-title, .fc-event-time, .fc-event-title-container {
-            background-color: #fce7f3;
-            border: 1.5px solid var(--primary-border);
+        .fc-event {
+            background-color: #fce7f3 !important;
+            border: 1.5px solid var(--primary-border) !important;
+            border-radius: 0.45rem;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        /* Los contenedores y textos internos deben ser transparentes sin bordes propios */
+        .fc-event-main, 
+        .fc-event-main-frame, 
+        .fc-event-title-container, 
+        .fc-event-title, 
+        .fc-event-time {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
             color: #000000 !important;
-            border-radius: 0.4rem;
-            padding: 1px 3px;
+        }
+
+        .fc-event-main {
+            padding: 2px 4px !important;
             font-size: 0.78rem;
             line-height: 1.25;
             font-weight: 700;
-            cursor: pointer;
         }
 
-        .fc-event-title, .fc-event-time, .fc-event-main * {
-            color: #000000 !important;
+        .fc-event-title, .fc-event-time {
             font-size: 0.78rem;
             font-weight: 700;
             line-height: 1.2;
         }
 
-        /* Depilación: Lavanda / Violeta suave bien diferenciado a golpe de vista */
-        .turno-depilacion, .turno-depilacion .fc-event-main {
+        /* Depilación: Tarjeta COMPLETA en Lavanda (fondo, borde e interior homogéneo) */
+        .turno-depilacion,
+        .turno-depilacion.fc-event {
             background-color: #ede9fe !important;
-            border-color: #c4b5fd !important;
+            border: 1.5px solid #a78bfa !important;
         }
 
-        .turno-depilacion, .turno-depilacion *, .turno-depilacion .fc-event-main * {
+        .turno-depilacion * {
+            background: transparent !important;
+            border: none !important;
             color: #000000 !important;
         }
 
-        .turno-enviado, .turno-enviado .fc-event-main {
+        /* Recordatorio Enviado (Uñas) */
+        .turno-enviado,
+        .turno-enviado.fc-event {
             background-color: #dcfce7 !important;
-            border-color: #86efac !important;
+            border: 1.5px solid #86efac !important;
         }
 
-        .turno-enviado, .turno-enviado *, .turno-enviado .fc-event-main * {
+        .turno-enviado * {
+            background: transparent !important;
+            border: none !important;
             color: #000000 !important;
         }
 
-        .turno-depilacion.turno-enviado, .turno-depilacion.turno-enviado .fc-event-main {
+        /* Recordatorio Enviado (Depilación) */
+        .turno-depilacion.turno-enviado,
+        .turno-depilacion.turno-enviado.fc-event {
             background-color: #e0e7ff !important;
-            border-color: #818cf8 !important;
+            border: 1.5px solid #818cf8 !important;
         }
 
-        .turno-depilacion.turno-enviado, .turno-depilacion.turno-enviado *, .turno-depilacion.turno-enviado .fc-event-main * {
+        .turno-depilacion.turno-enviado * {
+            background: transparent !important;
+            border: none !important;
             color: #000000 !important;
         }
 
