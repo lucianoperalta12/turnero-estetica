@@ -31,7 +31,9 @@ public class WhatsAppService
     public async Task<WhatsAppSendResult> EnviarRecordatorioAsync(TurnoInfo turno)
     {
         var url = _config.ServiceUrl;
-        var mensaje = BuildMensaje(turno);
+        var mensaje = turno.TipoServicio == "depilacion"
+            ? BuildMensajeDepilacion(turno)
+            : BuildMensaje(turno);
 
         var payload = new
         {
@@ -147,6 +149,65 @@ public class WhatsAppService
                  $"{nombre}, te esperamos hoy a las {turno.Hora} para tu turno.\n\n" +
                  "Si necesitás reprogramarlo, respondé este WhatsApp.\n\n" +
                  "¡Nos vemos!"
+        };
+    }
+
+    private static readonly System.Globalization.CultureInfo EsArCulture = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
+
+    /// <summary>
+    /// Mensaje de recordatorio para turnos de depilación definitiva (se envía el día anterior a las 13 hs).
+    /// Elige aleatoriamente entre las 3 plantillas de "Centro de Belleza SV".
+    /// </summary>
+    private static string BuildMensajeDepilacion(TurnoInfo turno)
+    {
+        var partes = (turno.Nombre ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var nombre = partes.Length > 0 ? partes[0] : string.Empty;
+        var saludoNombre = string.IsNullOrEmpty(nombre) ? string.Empty : $" {nombre}";
+
+        var diaSemana = EsArCulture.DateTimeFormat.GetDayName(turno.Fecha.DayOfWeek);
+        var diaTexto = $"{diaSemana} {turno.Fecha.Day}";
+        var diaTextoCap = char.ToUpper(diaSemana[0]) + diaSemana[1..] + $" {turno.Fecha.Day}";
+
+        var variante = Random.Shared.Next(3);
+        return variante switch
+        {
+            0 => $"Hola{saludoNombre} 😊 Te recordamos tu turno para el {diaTexto} a las {turno.Hora} hs.\n\n" +
+                 "✨ Antes de venir:\n" +
+                 "• Rasurá la zona con Gillette nueva la noche anterior.\n" +
+                 "• Traé TOALLA.\n" +
+                 "• No tomes sol ni uses cabina solar 24 hs antes ni después.\n" +
+                 "• Si tenés tatuajes en la zona, cubrilos con cinta de papel.\n\n" +
+                 "⚠️ IMPORTANTE:\n" +
+                 "Una vez recibido este mensaje:\n" +
+                 "• Cancelación/reprogramación antes del turno: 50% del valor.\n" +
+                 "• Cancelación el mismo día o ausencia sin aviso: 100% del valor.\n\n" +
+                 "💬 Respondé este mensaje para confirmar tu turno.\n\n" +
+                 "✨ Centro de Belleza SV ✨",
+
+            1 => $"🌷 ¡Hola{saludoNombre}! Te escribimos para recordarte que este {diaTexto} a las {turno.Hora} hs tenés tu sesión de depilación definitiva.\n\n" +
+                 "Antes de asistir:\n" +
+                 "• Rasurá la zona la noche anterior con Gillette nueva.\n" +
+                 "• Traé una toalla.\n" +
+                 "• Evitá sol/cabina solar 24 hs antes y después.\n" +
+                 "• Si hay tatuajes en la zona, cubrilos con cinta de papel.\n\n" +
+                 "📌 Cancelaciones: luego de recibir este recordatorio, la cancelación antes del turno tiene un cargo del 50%. Si cancelás el mismo día o no asistís, corresponde el 100%.\n\n" +
+                 "¿Nos confirmás tu asistencia respondiendo este mensaje? 🤍\n\n" +
+                 "Centro de Belleza SV",
+
+            _ => $"✨ ¡Hola{saludoNombre}! Recordatorio de tu turno ✨\n\n" +
+                 $"📅 {diaTextoCap}\n" +
+                 $"🕐 {turno.Hora} hs\n" +
+                 "🌸 Depilación definitiva\n\n" +
+                 "Para tu sesión, recordá:\n" +
+                 "✅ Rasurar la zona la noche anterior con Gillette nueva.\n" +
+                 "✅ Traer TOALLA.\n" +
+                 "✅ Evitar sol/cabina solar 24 hs antes y después.\n" +
+                 "✅ Cubrir tatuajes de la zona con cinta de papel.\n\n" +
+                 "⚠️ Después de recibir este aviso:\n" +
+                 "• Cancelación antes del turno → 50%.\n" +
+                 "• Cancelación el mismo día o inasistencia → 100%.\n\n" +
+                 "💬 Por favor, confirmá tu turno respondiendo este mensaje.\n\n" +
+                 "🤍 Centro de Belleza SV"
         };
     }
 

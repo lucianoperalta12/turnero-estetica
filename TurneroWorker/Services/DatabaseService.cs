@@ -40,12 +40,16 @@ public class DatabaseService
                 estado VARCHAR(20) DEFAULT 'confirmado',
                 recordatorio_enviado BOOLEAN DEFAULT FALSE,
                 notas TEXT,
+                tipo_servicio VARCHAR(20) NOT NULL DEFAULT 'unas',
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE INDEX IF NOT EXISTS idx_turnos_fecha_inicio ON turnero.turnos(fecha_inicio);
             CREATE INDEX IF NOT EXISTS idx_turnos_cliente_id ON turnero.turnos(cliente_id);
             CREATE INDEX IF NOT EXISTS idx_turnos_recordatorio ON turnero.turnos(fecha_inicio, recordatorio_enviado);
+
+            ALTER TABLE turnero.turnos ADD COLUMN IF NOT EXISTS tipo_servicio VARCHAR(20) NOT NULL DEFAULT 'unas';
+            CREATE INDEX IF NOT EXISTS idx_turnos_tipo_servicio ON turnero.turnos(tipo_servicio);
 
             CREATE TABLE IF NOT EXISTS turnero.whatsapp_error_log (
                 id                  SERIAL PRIMARY KEY,
@@ -131,7 +135,7 @@ public class DatabaseService
         var sql = @"
             SELECT t.id, t.cliente_id as ClienteId, t.titulo, t.fecha_inicio as FechaInicio, 
                    t.fecha_fin as FechaFin, t.estado, t.recordatorio_enviado as RecordatorioEnviado, 
-                   t.notas, t.fecha_creacion as FechaCreacion,
+                   t.notas, t.tipo_servicio as TipoServicio, t.fecha_creacion as FechaCreacion,
                    c.id, c.nombre, c.telefono, c.email, c.notas
             FROM turnero.turnos t
             LEFT JOIN turnero.clientes c ON t.cliente_id = c.id
@@ -152,8 +156,8 @@ public class DatabaseService
     public async Task<int> CrearTurnoAsync(Turno turno)
     {
         using var conn = CreateConnection();
-        var sql = @"INSERT INTO turnero.turnos (cliente_id, titulo, fecha_inicio, fecha_fin, estado, notas)
-                    VALUES (@ClienteId, @Titulo, @FechaInicio, @FechaFin, @Estado, @Notas)
+        var sql = @"INSERT INTO turnero.turnos (cliente_id, titulo, fecha_inicio, fecha_fin, estado, notas, tipo_servicio)
+                    VALUES (@ClienteId, @Titulo, @FechaInicio, @FechaFin, @Estado, @Notas, @TipoServicio)
                     RETURNING id;";
         return await conn.ExecuteScalarAsync<int>(sql, turno);
     }
@@ -163,7 +167,7 @@ public class DatabaseService
         using var conn = CreateConnection();
         var sql = @"UPDATE turnero.turnos
                     SET cliente_id = @ClienteId, titulo = @Titulo, fecha_inicio = @FechaInicio, 
-                        fecha_fin = @FechaFin, estado = @Estado, notas = @Notas
+                        fecha_fin = @FechaFin, estado = @Estado, notas = @Notas, tipo_servicio = @TipoServicio
                     WHERE id = @Id";
         await conn.ExecuteAsync(sql, turno);
     }
@@ -186,13 +190,14 @@ public class DatabaseService
         var sql = @"
             SELECT t.id, t.cliente_id as ClienteId, t.titulo, t.fecha_inicio as FechaInicio, 
                    t.fecha_fin as FechaFin, t.estado, t.recordatorio_enviado as RecordatorioEnviado, 
-                   t.notas, t.fecha_creacion as FechaCreacion,
+                   t.notas, t.tipo_servicio as TipoServicio, t.fecha_creacion as FechaCreacion,
                    c.id, c.nombre, c.telefono, c.email, c.notas
             FROM turnero.turnos t
             LEFT JOIN turnero.clientes c ON t.cliente_id = c.id
             WHERE t.fecha_inicio >= @InicioDia AND t.fecha_inicio <= @FinDia
               AND t.recordatorio_enviado = FALSE
               AND t.estado != 'cancelado'
+              AND t.tipo_servicio = 'unas'
             ORDER BY t.fecha_inicio ASC";
 
         return await conn.QueryAsync<Turno, Cliente, Turno>(
@@ -226,7 +231,7 @@ public class DatabaseService
         var sql = @"
             SELECT t.id, t.cliente_id as ClienteId, t.titulo, t.fecha_inicio as FechaInicio,
                    t.fecha_fin as FechaFin, t.estado, t.recordatorio_enviado as RecordatorioEnviado,
-                   t.notas, t.fecha_creacion as FechaCreacion,
+                   t.notas, t.tipo_servicio as TipoServicio, t.fecha_creacion as FechaCreacion,
                    c.id, c.nombre, c.telefono, c.email, c.notas
             FROM turnero.turnos t
             LEFT JOIN turnero.clientes c ON t.cliente_id = c.id
@@ -239,6 +244,40 @@ public class DatabaseService
             splitOn: "id");
 
         return result.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Devuelve turnos de depilación del día indicado con recordatorio pendiente.
+    /// Se usa para enviar el recordatorio el día anterior a las 13hs.
+    /// </summary>
+    public async Task<IEnumerable<Turno>> GetTurnosDepilacionMañanaAsync(DateTime mañana)
+    {
+        using var conn = CreateConnection();
+        var inicioDia = mañana.Date;
+        var finDia = mañana.Date.AddDays(1).AddTicks(-1);
+
+        var sql = @"
+            SELECT t.id, t.cliente_id as ClienteId, t.titulo, t.fecha_inicio as FechaInicio, 
+                   t.fecha_fin as FechaFin, t.estado, t.recordatorio_enviado as RecordatorioEnviado, 
+                   t.notas, t.tipo_servicio as TipoServicio, t.fecha_creacion as FechaCreacion,
+                   c.id, c.nombre, c.telefono, c.email, c.notas
+            FROM turnero.turnos t
+            LEFT JOIN turnero.clientes c ON t.cliente_id = c.id
+            WHERE t.fecha_inicio >= @InicioDia AND t.fecha_inicio <= @FinDia
+              AND t.recordatorio_enviado = FALSE
+              AND t.estado != 'cancelado'
+              AND t.tipo_servicio = 'depilacion'
+            ORDER BY t.fecha_inicio ASC";
+
+        return await conn.QueryAsync<Turno, Cliente, Turno>(
+            sql,
+            (turno, cliente) =>
+            {
+                turno.Cliente = cliente;
+                return turno;
+            },
+            new { InicioDia = inicioDia, FinDia = finDia },
+            splitOn: "id");
     }
 
     // ── ERROR LOG WHATSAPP ─────────────────────────────────────────────────────

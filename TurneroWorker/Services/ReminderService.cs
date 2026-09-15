@@ -32,7 +32,7 @@ public class ReminderService
     {
         _logger.LogInformation("=== Iniciando ciclo de recordatorios desde PostgreSQL ===");
 
-        // Buscar turnos para la fecha actual (o del día de hoy)
+        // ── UÑAS: recordatorio el mismo día ──────────────────────────────────
         var hoy = DateTime.Today;
         IEnumerable<Turno> turnosPendientes;
 
@@ -47,18 +47,50 @@ public class ReminderService
         }
 
         var listaTurnos = turnosPendientes.ToList();
-        _logger.LogInformation("Turnos pendientes de recordatorio encontrados en PostgreSQL: Count={Count}", listaTurnos.Count);
+        _logger.LogInformation("Turnos uñas pendientes de recordatorio: Count={Count}", listaTurnos.Count);
 
-        if (listaTurnos.Count == 0)
+        if (listaTurnos.Count > 0)
         {
-            _logger.LogInformation("Sin turnos pendientes para enviar hoy. Ciclo finalizado.");
-            return;
+            await ProcesarTurnosAsync(listaTurnos, cancellationToken);
         }
 
+        // ── DEPILACIÓN: recordatorio el día anterior a las 13hs ──────────────
+        // Solo se ejecuta cuando la hora local es >= 13 (ejecución de las 13:00)
+        var horaLocal = DateTime.Now.Hour;
+        if (horaLocal >= 13)
+        {
+            var mañana = hoy.AddDays(1);
+            IEnumerable<Turno> turnosDepilacion;
+
+            try
+            {
+                turnosDepilacion = await _dbService.GetTurnosDepilacionMañanaAsync(mañana);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al consultar turnos de depilación para mañana. Skipping.");
+                turnosDepilacion = [];
+            }
+
+            var listaDepilacion = turnosDepilacion.ToList();
+            _logger.LogInformation("Turnos depilación mañana ({Mañana}) pendientes: Count={Count}",
+                mañana.ToString("yyyy-MM-dd"), listaDepilacion.Count);
+
+            if (listaDepilacion.Count > 0)
+            {
+                await ProcesarTurnosAsync(listaDepilacion, cancellationToken);
+            }
+        }
+
+        _logger.LogInformation("=== Ciclo finalizado ===");
+    }
+
+    private async Task ProcesarTurnosAsync(List<Turno> turnos, CancellationToken cancellationToken)
+    {
         int enviados = 0;
         int errores = 0;
 
-        foreach (var turno in listaTurnos)
+        foreach (var turno in turnos)
         {
             if (cancellationToken.IsCancellationRequested) break;
 
@@ -70,15 +102,16 @@ public class ReminderService
 
             var turnoInfo = new TurnoInfo
             {
-                EventId = turno.Id.ToString(),
-                Nombre = turno.Cliente.Nombre,
-                Telefono = NormalizarTelefono(turno.Cliente.Telefono),
-                Fecha = DateOnly.FromDateTime(turno.FechaInicio),
-                Hora = turno.FechaInicio.ToString("HH:mm")
+                EventId      = turno.Id.ToString(),
+                Nombre       = turno.Cliente.Nombre,
+                Telefono     = NormalizarTelefono(turno.Cliente.Telefono),
+                Fecha        = DateOnly.FromDateTime(turno.FechaInicio),
+                Hora         = turno.FechaInicio.ToString("HH:mm"),
+                TipoServicio = turno.TipoServicio
             };
 
-            _logger.LogInformation("Procesando turno DB Id={Id}: {Cliente} | {Fecha} {Hora}",
-                turno.Id, turnoInfo.Nombre, turnoInfo.Fecha, turnoInfo.Hora);
+            _logger.LogInformation("Procesando turno Id={Id}: {Cliente} | {Fecha} {Hora} | Tipo={Tipo}",
+                turno.Id, turnoInfo.Nombre, turnoInfo.Fecha, turnoInfo.Hora, turnoInfo.TipoServicio);
 
             WhatsAppSendResult resultado;
             try
@@ -107,7 +140,7 @@ public class ReminderService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Envío de WhatsApp exitoso pero falló al actualizar recordatorio_enviado en la BD para turno Id={Id}", turno.Id);
+                    _logger.LogError(ex, "Envío exitoso pero falló al actualizar recordatorio_enviado para turno Id={Id}", turno.Id);
                 }
             }
             else
@@ -125,8 +158,8 @@ public class ReminderService
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
 
-        _logger.LogInformation("=== Ciclo finalizado: {Enviados} enviados, {Errores} errores, {Total} total ===",
-            enviados, errores, listaTurnos.Count);
+        _logger.LogInformation("Lote procesado: {Enviados} enviados, {Errores} errores, {Total} total",
+            enviados, errores, turnos.Count);
     }
 
     /// <summary>

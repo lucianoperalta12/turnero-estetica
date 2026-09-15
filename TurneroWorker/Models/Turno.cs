@@ -10,6 +10,7 @@ public class Turno
     public string Estado { get; set; } = "confirmado";
     public bool RecordatorioEnviado { get; set; }
     public string? Notas { get; set; }
+    public string TipoServicio { get; set; } = "unas"; // "unas" | "depilacion"
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
 
     // Propiedad de navegación / Join

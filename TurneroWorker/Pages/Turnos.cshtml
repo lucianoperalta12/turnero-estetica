@@ -295,19 +295,33 @@
 
         /* High Contrast Text on Calendar Cards & Reminder Sent Badge */
         .fc-event, .fc-event-main, .fc-event-title, .fc-event-time {
-            background-color: #fce7f3 !important;
-            border: 1.5px solid var(--primary-border) !important;
-            color: #0f172a !important;
+            background-color: #fce7f3;
+            border: 1.5px solid var(--primary-border);
+            color: #0f172a;
             border-radius: 0.4rem;
             padding: 2px 4px;
-            font-size: 0.8rem !important;
-            font-weight: 700 !important;
+            font-size: 0.8rem;
+            font-weight: 700;
             cursor: pointer;
         }
 
-        .turno-enviado {
+        /* Depilación: Lavanda / Violeta suave bien diferenciado a golpe de vista */
+        .turno-depilacion, .turno-depilacion .fc-event-main, .turno-depilacion .fc-event-title, .turno-depilacion .fc-event-time {
+            background-color: #ede9fe !important;
+            border-color: #c4b5fd !important;
+            color: #5b21b6 !important;
+        }
+
+        .turno-enviado, .turno-enviado .fc-event-main {
             background-color: #dcfce7 !important;
             border-color: #86efac !important;
+            color: #14532d !important;
+        }
+
+        .turno-depilacion.turno-enviado, .turno-depilacion.turno-enviado .fc-event-main {
+            background-color: #e0e7ff !important;
+            border-color: #818cf8 !important;
+            color: #312e81 !important;
         }
 
         .fc-col-header-cell {
@@ -322,7 +336,7 @@
         }
 
         .fc-timegrid-slot {
-            height: 2.6em !important;
+            height: 1.3em !important;
         }
 
         /* Clientes Table Layout & Scrolling */
@@ -718,14 +732,39 @@
                 <input type="hidden" id="turno-id">
                 <input type="hidden" id="turno-cliente-id">
                 <input type="hidden" id="turno-inicio">
+                <input type="hidden" id="turno-tipo-servicio" value="unas">
+
+                <!-- Tipo de Servicio -->
+                <div class="form-group">
+                    <label>Tipo de Servicio</label>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button type="button" id="btn-tipo-unas"
+                            onclick="setTipoServicio('unas')"
+                            style="flex:1; padding:0.45rem 0.6rem; border-radius:0.45rem; border:1.5px solid var(--primary); background:var(--primary); color:white; font-weight:600; font-size:0.85rem; cursor:pointer; transition:all 0.18s;">
+                            💅 Uñas
+                        </button>
+                        <button type="button" id="btn-tipo-depilacion"
+                            onclick="setTipoServicio('depilacion')"
+                            style="flex:1; padding:0.45rem 0.6rem; border-radius:0.45rem; border:1.5px solid var(--primary-border); background:white; color:var(--text-muted); font-weight:600; font-size:0.85rem; cursor:pointer; transition:all 0.18s;">
+                            ✨ Depilación
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Fecha y Hora Destacada -->
                 <div class="form-group">
-                    <label>Fecha & Hora</label>
+                    <label>Fecha</label>
                     <div class="datetime-badge">
                         <i class="fa-regular fa-calendar-check"></i>
                         <span id="turno-inicio-display">--</span>
                     </div>
+                </div>
+
+                <!-- Hora editable -->
+                <div class="form-group">
+                    <label>Hora</label>
+                    <input type="time" id="turno-hora" step="900"
+                        style="padding:0.45rem 0.65rem; border-radius:0.45rem; border:1px solid var(--primary-border); font-size:0.88rem; height:38px; width:100%; box-sizing:border-box; outline:none; background:white;">
                 </div>
 
                 <!-- Buscador de Clienta con Autocompletado -->
@@ -818,7 +857,7 @@
                 height: '100%',
                 expandRows: true,
                 navLinks: true,
-                scrollTime: '10:00:00',
+                scrollTime: '08:00:00',
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
@@ -830,8 +869,9 @@
                     week: 'Semana',
                     day: 'Día'
                 },
-                slotMinTime: '10:00:00',
+                slotMinTime: '08:00:00',
                 slotMaxTime: '22:00:00',
+                slotDuration: '00:15:00',
                 allDaySlot: false,
                 selectable: true,
                 events: '/api/turnos',
@@ -839,6 +879,10 @@
                 selectHelper: true,
                 unselectAuto: true,
                 eventDidMount: function(info) {
+                    const tipo = info.event.extendedProps && info.event.extendedProps.tipoServicio;
+                    if (tipo === 'depilacion') {
+                        info.el.classList.add('turno-depilacion');
+                    }
                     if (info.event.extendedProps && info.event.extendedProps.recordatorioEnviado) {
                         info.el.classList.add('turno-enviado');
                         const titleEl = info.el.querySelector('.fc-event-title');
@@ -1062,14 +1106,49 @@
             return `${diaNom} ${diaNum} de ${mesNom} - ${horaStr}`;
         }
 
+        // Formatea solo la fecha (sin hora) para el badge del modal
+        function formatFechaDisplay(dateIsoOrObj) {
+            const date = new Date(dateIsoOrObj);
+            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+            return `${dias[date.getDay()]} ${date.getDate()} de ${meses[date.getMonth()]}`;
+        }
+
+        function setTipoServicio(tipo) {
+            document.getElementById('turno-tipo-servicio').value = tipo;
+            const btnUnas = document.getElementById('btn-tipo-unas');
+            const btnDep  = document.getElementById('btn-tipo-depilacion');
+            if (tipo === 'depilacion') {
+                btnDep.style.background  = 'var(--primary)';
+                btnDep.style.color       = 'white';
+                btnDep.style.borderColor = 'var(--primary)';
+                btnUnas.style.background  = 'white';
+                btnUnas.style.color       = 'var(--text-muted)';
+                btnUnas.style.borderColor = 'var(--primary-border)';
+                document.getElementById('turno-titulo').value = 'Depilación';
+            } else {
+                btnUnas.style.background  = 'var(--primary)';
+                btnUnas.style.color       = 'white';
+                btnUnas.style.borderColor = 'var(--primary)';
+                btnDep.style.background  = 'white';
+                btnDep.style.color       = 'var(--text-muted)';
+                btnDep.style.borderColor = 'var(--primary-border)';
+                document.getElementById('turno-titulo').value = 'Turno Estética';
+            }
+        }
+
         function openNewTurnoModal(startStr) {
             document.getElementById('turno-id').value = '';
             document.getElementById('turno-cliente-id').value = '';
             document.getElementById('turno-modal-title').textContent = 'Nueva Cita';
             document.getElementById('btn-delete-turno').style.display = 'none';
+            document.getElementById('recordatorio-section').style.display = 'none';
 
             document.getElementById('turno-cliente-search').value = '';
             document.getElementById('autocomplete-results').classList.remove('active');
+
+            // Resetear tipo a uñas
+            setTipoServicio('unas');
 
             let rawStart = startStr;
             if (!rawStart) {
@@ -1079,13 +1158,13 @@
                 rawStart = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
             }
 
-            document.getElementById('turno-inicio').value = rawStart.substring(0, 16);
-            document.getElementById('turno-inicio-display').textContent = formatDateTimeDisplay(rawStart);
+            const fechaStr = rawStart.substring(0, 16); // YYYY-MM-DDTHH:mm
+            document.getElementById('turno-inicio').value = fechaStr;
+            document.getElementById('turno-inicio-display').textContent = formatFechaDisplay(rawStart);
+            document.getElementById('turno-hora').value = fechaStr.substring(11, 16); // HH:mm
 
-            document.getElementById('turno-titulo').value = 'Turno Estética';
             document.getElementById('turno-modal').classList.add('active');
 
-            // Foco automático en el buscador de clienta
             setTimeout(() => {
                 const input = document.getElementById('turno-cliente-search');
                 if (input) input.focus();
@@ -1103,13 +1182,17 @@
             document.getElementById('turno-cliente-search').value = client ? `${client.nombre} (${client.telefono})` : (props.clienteNombre || '');
             document.getElementById('autocomplete-results').classList.remove('active');
 
+            // Restaurar tipo de servicio
+            setTipoServicio(props.tipoServicio || 'unas');
+            // Pero respetar el título original guardado
             document.getElementById('turno-titulo').value = props.tituloOriginal || 'Turno Estética';
 
             const evStart = eventObj.start;
             const pad = n => String(n).padStart(2, '0');
             const localStr = `${evStart.getFullYear()}-${pad(evStart.getMonth()+1)}-${pad(evStart.getDate())}T${pad(evStart.getHours())}:${pad(evStart.getMinutes())}`;
             document.getElementById('turno-inicio').value = localStr;
-            document.getElementById('turno-inicio-display').textContent = formatDateTimeDisplay(evStart);
+            document.getElementById('turno-inicio-display').textContent = formatFechaDisplay(evStart);
+            document.getElementById('turno-hora').value = `${pad(evStart.getHours())}:${pad(evStart.getMinutes())}`;
 
             // Mostrar sección recordatorio y sincronizar checkbox
             document.getElementById('recordatorio-section').style.display = 'block';
@@ -1121,10 +1204,12 @@
 
         async function saveTurno() {
             const id = document.getElementById('turno-id').value;
-            // Tomar la string del input directamente ("2026-07-27T10:00") sin convertir a UTC
-            const startStr = document.getElementById('turno-inicio').value; // "YYYY-MM-DDTHH:mm"
+            // Combinar la fecha del hidden input con la hora editable
+            const fechaSolo = document.getElementById('turno-inicio').value.substring(0, 10); // YYYY-MM-DD
+            const horaSolo  = document.getElementById('turno-hora').value;                    // HH:mm
+            const startStr  = `${fechaSolo}T${horaSolo}`;
             const startDate = new Date(startStr);
-            const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+            const endDate   = new Date(startDate.getTime() + 60 * 60 * 1000);
             const pad = n => String(n).padStart(2, '0');
             const endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth()+1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
 
@@ -1132,10 +1217,11 @@
             const payload = {
                 clienteId: rawClienteId ? parseInt(rawClienteId) : null,
                 titulo: document.getElementById('turno-titulo').value || 'Turno',
-                fechaInicio: startStr + ':00', // "YYYY-MM-DDTHH:mm:ss" sin zona → el server lo toma como local
+                fechaInicio: startStr + ':00',
                 fechaFin: endStr,
                 estado: 'confirmado',
-                notas: ''
+                notas: '',
+                tipoServicio: document.getElementById('turno-tipo-servicio').value || 'unas'
             };
 
             const method = id ? 'PUT' : 'POST';

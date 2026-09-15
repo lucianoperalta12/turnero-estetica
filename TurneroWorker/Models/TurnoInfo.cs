@@ -19,4 +19,7 @@ public class TurnoInfo
 
     /// <summary>Hora del turno formateada, p.ej. "10:30".</summary>
     public string Hora { get; set; } = string.Empty;
+
+    /// <summary>Tipo de servicio: "unas" o "depilacion".</summary>
+    public string TipoServicio { get; set; } = "unas";
 }

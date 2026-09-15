@@ -23,8 +23,13 @@ CREATE TABLE IF NOT EXISTS turnero.turnos (
     estado VARCHAR(20) DEFAULT 'confirmado', -- 'confirmado', 'cancelado', 'completado'
     recordatorio_enviado BOOLEAN DEFAULT FALSE,
     notas TEXT,
+    tipo_servicio VARCHAR(20) NOT NULL DEFAULT 'unas',
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Si la tabla ya existe, ejecutar:
+-- ALTER TABLE turnero.turnos ADD COLUMN IF NOT EXISTS tipo_servicio VARCHAR(20) NOT NULL DEFAULT 'unas';
+-- CREATE INDEX IF NOT EXISTS idx_turnos_tipo_servicio ON turnero.turnos(tipo_servicio);
 
 -- Índices para optimizar búsquedas por fecha y cliente
 CREATE INDEX IF NOT EXISTS idx_turnos_fecha_inicio ON turnero.turnos(fecha_inicio);

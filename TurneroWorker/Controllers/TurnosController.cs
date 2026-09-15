@@ -42,7 +42,8 @@ public class TurnosController : ControllerBase
                 tituloOriginal = t.Titulo,
                 estado = t.Estado,
                 recordatorioEnviado = t.RecordatorioEnviado,
-                notas = t.Notas
+                notas = t.Notas,
+                tipoServicio = t.TipoServicio
             }
         });
 
@@ -112,7 +113,8 @@ public class TurnosController : ControllerBase
             Nombre   = turno.Cliente.Nombre,
             Telefono = telefono,
             Fecha    = DateOnly.FromDateTime(turno.FechaInicio),
-            Hora     = turno.FechaInicio.ToString("HH:mm")
+            Hora     = turno.FechaInicio.ToString("HH:mm"),
+            TipoServicio = turno.TipoServicio
         };
 
         var resultado = await _whatsAppService.EnviarRecordatorioAsync(turnoInfo);
