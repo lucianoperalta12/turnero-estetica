@@ -733,25 +733,9 @@
                 <input type="hidden" id="turno-cliente-id">
                 <input type="hidden" id="turno-inicio">
                 <input type="hidden" id="turno-tipo-servicio" value="unas">
+                <input type="hidden" id="turno-duracion" value="60">
 
-                <!-- Tipo de Servicio -->
-                <div class="form-group">
-                    <label>Tipo de Servicio</label>
-                    <div style="display:flex; gap:0.5rem;">
-                        <button type="button" id="btn-tipo-unas"
-                            onclick="setTipoServicio('unas')"
-                            style="flex:1; padding:0.45rem 0.6rem; border-radius:0.45rem; border:1.5px solid var(--primary); background:var(--primary); color:white; font-weight:600; font-size:0.85rem; cursor:pointer; transition:all 0.18s;">
-                            💅 Uñas
-                        </button>
-                        <button type="button" id="btn-tipo-depilacion"
-                            onclick="setTipoServicio('depilacion')"
-                            style="flex:1; padding:0.45rem 0.6rem; border-radius:0.45rem; border:1.5px solid var(--primary-border); background:white; color:var(--text-muted); font-weight:600; font-size:0.85rem; cursor:pointer; transition:all 0.18s;">
-                            ✨ Depilación
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Fecha y Hora Destacada -->
+                <!-- Fecha Destacada -->
                 <div class="form-group">
                     <label>Fecha</label>
                     <div class="datetime-badge">
@@ -760,11 +744,28 @@
                     </div>
                 </div>
 
-                <!-- Hora editable -->
+                <!-- Hora de inicio y botones de duración -->
                 <div class="form-group">
                     <label>Hora</label>
                     <input type="time" id="turno-hora" step="900"
                         style="padding:0.45rem 0.65rem; border-radius:0.45rem; border:1px solid var(--primary-border); font-size:0.88rem; height:38px; width:100%; box-sizing:border-box; outline:none; background:white;">
+                    <div style="margin-top:0.4rem;">
+                        <span style="font-size:0.75rem; font-weight:700; color:var(--text-main); display:block; margin-bottom:0.25rem; text-transform:uppercase; letter-spacing:0.3px;">Duración</span>
+                        <div style="display:flex; gap:0.4rem;">
+                            <button type="button" id="btn-dur-15" onclick="setDuracion(15)"
+                                style="flex:1; padding:0.45rem 0.2rem; border-radius:0.45rem; border:1.5px solid var(--primary-border); background:white; color:var(--text-main); font-weight:600; font-size:0.82rem; cursor:pointer; transition:all 0.18s; touch-action:manipulation;">
+                                15 min
+                            </button>
+                            <button type="button" id="btn-dur-30" onclick="setDuracion(30)"
+                                style="flex:1; padding:0.45rem 0.2rem; border-radius:0.45rem; border:1.5px solid var(--primary-border); background:white; color:var(--text-main); font-weight:600; font-size:0.82rem; cursor:pointer; transition:all 0.18s; touch-action:manipulation;">
+                                30 min
+                            </button>
+                            <button type="button" id="btn-dur-60" onclick="setDuracion(60)"
+                                style="flex:1; padding:0.45rem 0.2rem; border-radius:0.45rem; border:1.5px solid var(--primary); background:var(--primary); color:white; font-weight:600; font-size:0.82rem; cursor:pointer; transition:all 0.18s; touch-action:manipulation;">
+                                60 min
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Buscador de Clienta con Autocompletado -->
@@ -777,6 +778,23 @@
                     </div>
                     <input type="text" id="turno-cliente-search" placeholder="Escribí nombre o teléfono..." autocomplete="off" oninput="onClientSearchInput()" onfocus="onClientSearchInput()">
                     <div id="autocomplete-results" class="autocomplete-dropdown"></div>
+                </div>
+
+                <!-- Tipo de Servicio (Debajo de Clienta) -->
+                <div class="form-group">
+                    <label>Tipo de Servicio</label>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button type="button" id="btn-tipo-unas"
+                            onclick="setTipoServicio('unas')"
+                            style="flex:1; padding:0.45rem 0.6rem; border-radius:0.45rem; border:1.5px solid var(--primary); background:var(--primary); color:white; font-weight:600; font-size:0.85rem; cursor:pointer; transition:all 0.18s; touch-action:manipulation;">
+                            💅 Uñas
+                        </button>
+                        <button type="button" id="btn-tipo-depilacion"
+                            onclick="setTipoServicio('depilacion')"
+                            style="flex:1; padding:0.45rem 0.6rem; border-radius:0.45rem; border:1.5px solid var(--primary-border); background:white; color:var(--text-muted); font-weight:600; font-size:0.85rem; cursor:pointer; transition:all 0.18s; touch-action:manipulation;">
+                            ✨ Depilación
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Tratamiento / Servicio -->
@@ -1114,6 +1132,23 @@
             return `${dias[date.getDay()]} ${date.getDate()} de ${meses[date.getMonth()]}`;
         }
 
+        function setDuracion(minutos) {
+            document.getElementById('turno-duracion').value = minutos;
+            [15, 30, 60].forEach(m => {
+                const btn = document.getElementById('btn-dur-' + m);
+                if (!btn) return;
+                if (m === minutos) {
+                    btn.style.background  = 'var(--primary)';
+                    btn.style.borderColor = 'var(--primary)';
+                    btn.style.color       = 'white';
+                } else {
+                    btn.style.background  = 'white';
+                    btn.style.borderColor = 'var(--primary-border)';
+                    btn.style.color       = 'var(--text-main)';
+                }
+            });
+        }
+
         function setTipoServicio(tipo) {
             document.getElementById('turno-tipo-servicio').value = tipo;
             const btnUnas = document.getElementById('btn-tipo-unas');
@@ -1147,8 +1182,9 @@
             document.getElementById('turno-cliente-search').value = '';
             document.getElementById('autocomplete-results').classList.remove('active');
 
-            // Resetear tipo a uñas
+            // Resetear tipo a uñas y duración a 60 min
             setTipoServicio('unas');
+            setDuracion(60);
 
             let rawStart = startStr;
             if (!rawStart) {
@@ -1184,8 +1220,15 @@
 
             // Restaurar tipo de servicio
             setTipoServicio(props.tipoServicio || 'unas');
-            // Pero respetar el título original guardado
+            // Respetar el título original guardado
             document.getElementById('turno-titulo').value = props.tituloOriginal || 'Turno Estética';
+
+            // Calcular y restaurar duración en minutos
+            let durMin = 60;
+            if (eventObj.start && eventObj.end) {
+                durMin = Math.round((eventObj.end.getTime() - eventObj.start.getTime()) / 60000);
+            }
+            setDuracion([15, 30, 60].includes(durMin) ? durMin : 60);
 
             const evStart = eventObj.start;
             const pad = n => String(n).padStart(2, '0');
@@ -1204,12 +1247,13 @@
 
         async function saveTurno() {
             const id = document.getElementById('turno-id').value;
-            // Combinar la fecha del hidden input con la hora editable
+            // Combinar la fecha del hidden input con la hora editable y duración seleccionada
+            const duracionMin = parseInt(document.getElementById('turno-duracion').value) || 60;
             const fechaSolo = document.getElementById('turno-inicio').value.substring(0, 10); // YYYY-MM-DD
             const horaSolo  = document.getElementById('turno-hora').value;                    // HH:mm
             const startStr  = `${fechaSolo}T${horaSolo}`;
             const startDate = new Date(startStr);
-            const endDate   = new Date(startDate.getTime() + 60 * 60 * 1000);
+            const endDate   = new Date(startDate.getTime() + duracionMin * 60 * 1000);
             const pad = n => String(n).padStart(2, '0');
             const endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth()+1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
 
