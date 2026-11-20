@@ -68,24 +68,18 @@ public class ClientesController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.Mensaje))
             return BadRequest("El mensaje no puede estar vacío.");
 
-        // ── MODO PRUEBA ──────────────────────────────────────────────────────
-        // Solo envía al número de prueba. Comentar este bloque para producción.
-        var clientePrueba = new Cliente { Nombre = "Prueba", Telefono = "3564562288" };
-        _ = _whatsAppService.EnviarDifusionAsync(new[] { clientePrueba }, req.Mensaje);
-        return Accepted(new { total = 1, mensaje = "Difusión de PRUEBA iniciada para 3564562288." });
-        // ────────────────────────────────────────────────────────────────────
+        if (req.Mensaje.Length > 1000)
+            return BadRequest("El mensaje no puede superar los 1000 caracteres.");
 
-        // ── PRODUCCIÓN (descomentar cuando la prueba sea exitosa) ────────────
-        //var clientes = await _dbService.GetClientesAsync(null);
-        //var lista = clientes.Where(c => !string.IsNullOrWhiteSpace(c.Telefono)).ToList();
-        //
-        //if (lista.Count == 0)
-        //    return Ok(new { enviados = 0, errores = 0, total = 0 });
-        //
-        //// Disparar en background para no bloquear la respuesta HTTP
-        //_ = _whatsAppService.EnviarDifusionAsync(lista, req.Mensaje);
-        //
-        //return Accepted(new { total = lista.Count, mensaje = $"Difusión iniciada para {lista.Count} clientes." });
-        // ────────────────────────────────────────────────────────────────────
+        var clientes = await _dbService.GetClientesAsync(null);
+        var lista = clientes.Where(c => !string.IsNullOrWhiteSpace(c.Telefono)).ToList();
+
+        if (lista.Count == 0)
+            return Ok(new { enviados = 0, errores = 0, total = 0 });
+
+        // Disparar en background para no bloquear la respuesta HTTP
+        _ = _whatsAppService.EnviarDifusionAsync(lista, req.Mensaje);
+
+        return Accepted(new { total = lista.Count, mensaje = $"Difusión iniciada para {lista.Count} clientes." });
     }
 }

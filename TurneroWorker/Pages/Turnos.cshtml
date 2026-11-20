@@ -910,11 +910,12 @@
                 <div class="form-group">
                     <label>Mensaje</label>
                     <textarea id="difusion-mensaje"
+                        maxlength="600"
                         placeholder="Escribí el mensaje para todas tus clientas... (podés usar emojis 😊)"
                         rows="7"
                         style="padding:0.55rem 0.65rem; border-radius:0.45rem; border:1px solid var(--primary-border); font-size:0.9rem; outline:none; background:white; resize:vertical; width:100%; box-sizing:border-box; font-family:inherit; line-height:1.5;"
                         oninput="actualizarContadorDifusion()"></textarea>
-                    <span id="difusion-contador" style="font-size:0.75rem; color:var(--text-muted); align-self:flex-end;">0 caracteres</span>
+                    <span id="difusion-contador" style="font-size:0.75rem; color:var(--text-muted); align-self:flex-end;">0 / 600 caracteres</span>
                 </div>
                 <div id="difusion-preview" style="display:none; background:var(--primary-light); border:1px solid var(--primary-border); border-radius:0.5rem; padding:0.75rem; font-size:0.85rem; white-space:pre-wrap; word-break:break-word; color:var(--text-main);"></div>
                 <div id="difusion-status" style="display:none; padding:0.6rem 0.85rem; border-radius:0.5rem; font-size:0.85rem; font-weight:600;"></div>
@@ -925,7 +926,7 @@
                         <i class="fa-solid fa-eye"></i> Vista previa
                     </button>
                     <button class="btn-header btn-secondary btn-modal-action" onclick="closeModal('difusion-modal')">Cancelar</button>
-                    <button id="btn-enviar-difusion" class="btn-header btn-modal-action" onclick="enviarDifusion()"
+                    <button id="btn-enviar-difusion" class="btn-header btn-modal-action" onclick="pedirConfirmacionDifusion()"
                         style="background:#22c55e; color:white;">
                         <i class="fa-brands fa-whatsapp"></i> Enviar a todas
                     </button>
@@ -933,6 +934,40 @@
                 <p style="font-size:0.72rem; color:var(--text-muted); text-align:center; margin:0;">
                     Se enviará con pausas aleatorias entre mensajes para proteger tu cuenta.
                 </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmación Difusión Estilo Elegante / Móvil -->
+    <div id="confirm-difusion-modal" class="modal-overlay" style="z-index: 110;">
+        <div class="modal" style="max-width: 380px; min-height: auto;">
+            <div class="modal-header" style="background:#fdf2f8;">
+                <h3 style="display:flex; align-items:center; gap:0.5rem; color:var(--primary);">
+                    <i class="fa-solid fa-paper-plane"></i> Confirmar Envío
+                </h3>
+                <button class="close-btn" onclick="closeModal('confirm-difusion-modal')">&times;</button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 1.25rem 1rem; gap: 0.75rem;">
+                <div style="width: 50px; height: 50px; border-radius: 50%; background: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto;">
+                    <i class="fa-brands fa-whatsapp"></i>
+                </div>
+                <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-main);" id="confirm-difusion-titulo">
+                    ¿Enviar difusión masiva?
+                </h4>
+                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;" id="confirm-difusion-texto">
+                    Se enviará este mensaje a todas tus clientas agendadas.
+                </p>
+                <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 0.5rem; padding: 0.6rem; font-size: 0.78rem; color: #64748b;">
+                    🛡️ <strong>Modo seguro:</strong> Se aplicarán pausas aleatorias de 5 a 40 segundos entre mensajes para no bloquear la línea.
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 0.75rem 1rem;">
+                <button class="btn-header btn-secondary" style="flex: 1;" onclick="closeModal('confirm-difusion-modal')">
+                    Cancelar
+                </button>
+                <button class="btn-header" style="flex: 1; background: #22c55e; color: white;" onclick="confirmarYEjecutarDifusion()">
+                    <i class="fa-solid fa-check"></i> Sí, enviar
+                </button>
             </div>
         </div>
     </div>
@@ -1157,17 +1192,18 @@
         // --- DIFUSIÓN ---
         function openDifusionModal() {
             document.getElementById('difusion-mensaje').value = '';
-            document.getElementById('difusion-contador').textContent = '0 caracteres';
+            document.getElementById('difusion-contador').textContent = '0 / 600 caracteres';
             document.getElementById('difusion-preview').style.display = 'none';
             document.getElementById('difusion-preview').textContent = '';
             document.getElementById('difusion-status').style.display = 'none';
             document.getElementById('btn-enviar-difusion').disabled = false;
+            document.getElementById('btn-enviar-difusion').innerHTML = '<i class="fa-brands fa-whatsapp"></i> Enviar a todas';
             document.getElementById('difusion-modal').classList.add('active');
         }
 
         function actualizarContadorDifusion() {
             const txt = document.getElementById('difusion-mensaje').value;
-            document.getElementById('difusion-contador').textContent = `${txt.length} caracteres`;
+            document.getElementById('difusion-contador').textContent = `${txt.length} / 600 caracteres`;
         }
 
         function togglePreviewDifusion() {
@@ -1181,16 +1217,26 @@
             }
         }
 
-        async function enviarDifusion() {
+        function pedirConfirmacionDifusion() {
             const mensaje = document.getElementById('difusion-mensaje').value.trim();
             if (!mensaje) {
                 alert('El mensaje no puede estar vacío.');
                 return;
             }
 
-            const totalClientes = clientesCache.length;
-            if (!confirm(`¿Enviar este mensaje a ${totalClientes} clientas?\n\nSe enviará con pausas aleatorias entre cada mensaje.`)) return;
+            const totalClientes = clientesCache.filter(c => c.telefono && c.telefono.trim().length > 0).length;
+            document.getElementById('confirm-difusion-titulo').textContent = `¿Enviar a ${totalClientes} clientas?`;
+            document.getElementById('confirm-difusion-texto').textContent = 
+                `Se iniciará el envío masivo para las ${totalClientes} clientas que poseen teléfono registrado.`;
+            document.getElementById('confirm-difusion-modal').classList.add('active');
+        }
 
+        async function confirmarYEjecutarDifusion() {
+            closeModal('confirm-difusion-modal');
+            const mensaje = document.getElementById('difusion-mensaje').value.trim();
+            if (!mensaje) return;
+
+            const totalClientes = clientesCache.filter(c => c.telefono && c.telefono.trim().length > 0).length;
             const btn = document.getElementById('btn-enviar-difusion');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
