@@ -211,6 +211,54 @@ public class WhatsAppService
         };
     }
 
+    /// <summary>
+    /// Envía un mensaje de difusión a todos los clientes de la lista,
+    /// con pausas aleatorias de 5 a 40 segundos entre envíos para evitar bloqueos.
+    /// </summary>
+    public async Task EnviarDifusionAsync(IEnumerable<Cliente> clientes, string mensaje)
+    {
+        foreach (var cliente in clientes)
+        {
+            var telefono = NormalizarTelefonoDifusion(cliente.Telefono ?? string.Empty);
+            if (string.IsNullOrEmpty(telefono))
+            {
+                _logger.LogWarning("Difusión: cliente Id={Id} sin teléfono válido, se omite.", cliente.Id);
+                continue;
+            }
+
+            _logger.LogInformation("Difusión: enviando a {Nombre} ({Tel})", cliente.Nombre, telefono);
+            var resultado = await EnviarMensajeDirectoAsync(telefono, mensaje);
+
+            if (resultado.Exitoso)
+                _logger.LogInformation("Difusión OK: {Nombre} ({Tel})", cliente.Nombre, telefono);
+            else
+                _logger.LogWarning("Difusión FALLO: {Nombre} ({Tel}) - {Error}", cliente.Nombre, telefono, resultado.Error);
+
+            var delaySegundos = Random.Shared.Next(5, 41);
+            _logger.LogInformation("Difusión: pausa {Segundos}s antes del próximo envío...", delaySegundos);
+            await Task.Delay(TimeSpan.FromSeconds(delaySegundos));
+        }
+
+        _logger.LogInformation("Difusión finalizada.");
+    }
+
+    private static string NormalizarTelefonoDifusion(string rawPhone)
+    {
+        if (string.IsNullOrWhiteSpace(rawPhone)) return string.Empty;
+
+        var digits = new string(rawPhone.Where(char.IsDigit).ToArray());
+
+        if (digits.StartsWith("0"))
+            digits = digits.Substring(1);
+
+        if (digits.Length == 10)
+            digits = "549" + digits;
+        else if (digits.Length == 11 && digits.StartsWith("54") && !digits.StartsWith("549"))
+            digits = "549" + digits.Substring(2);
+
+        return digits;
+    }
+
     private static string? ExtraerMessageId(string json)
     {
         try
