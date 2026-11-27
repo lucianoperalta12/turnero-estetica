@@ -219,7 +219,7 @@ public class WhatsAppService
     {
         foreach (var cliente in clientes)
         {
-            var telefono = NormalizarTelefonoDifusion(cliente.Telefono ?? string.Empty);
+            var telefono = PhoneHelper.NormalizarTelefono(cliente.Telefono);
             if (string.IsNullOrEmpty(telefono))
             {
                 _logger.LogWarning("Difusión: cliente Id={Id} sin teléfono válido, se omite.", cliente.Id);
@@ -240,23 +240,6 @@ public class WhatsAppService
         }
 
         _logger.LogInformation("Difusión finalizada.");
-    }
-
-    private static string NormalizarTelefonoDifusion(string rawPhone)
-    {
-        if (string.IsNullOrWhiteSpace(rawPhone)) return string.Empty;
-
-        var digits = new string(rawPhone.Where(char.IsDigit).ToArray());
-
-        if (digits.StartsWith("0"))
-            digits = digits.Substring(1);
-
-        if (digits.Length == 10)
-            digits = "549" + digits;
-        else if (digits.Length == 11 && digits.StartsWith("54") && !digits.StartsWith("549"))
-            digits = "549" + digits.Substring(2);
-
-        return digits;
     }
 
     private static string? ExtraerMessageId(string json)

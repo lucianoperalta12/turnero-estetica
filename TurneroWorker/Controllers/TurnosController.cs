@@ -106,7 +106,7 @@ public class TurnosController : ControllerBase
         if (turno.Cliente is null || string.IsNullOrWhiteSpace(turno.Cliente.Telefono))
             return BadRequest(new { error = "El turno no tiene cliente o teléfono válido." });
 
-        var telefono = NormalizarTelefono(turno.Cliente.Telefono);
+        var telefono = PhoneHelper.NormalizarTelefono(turno.Cliente.Telefono);
         var turnoInfo = new TurnoInfo
         {
             EventId  = turno.Id.ToString(),
@@ -132,13 +132,4 @@ public class TurnosController : ControllerBase
         });
     }
 
-    private static string NormalizarTelefono(string rawPhone)
-    {
-        var digits = new string(rawPhone.Where(char.IsDigit).ToArray());
-        if (digits.StartsWith("0")) digits = digits[1..];
-        if (digits.Length == 10) digits = "549" + digits;
-        else if (digits.Length == 11 && digits.StartsWith("54") && !digits.StartsWith("549"))
-            digits = "549" + digits[2..];
-        return digits;
-    }
 }
